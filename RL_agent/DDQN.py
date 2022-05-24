@@ -14,7 +14,7 @@ LR = 0.001  # learning rate
 EPSILON = 0.6  # greedy algorithm
 GAMMA = 0.9  # reward discount
 TARGET_UPDATE = 100  # update the target network after training
-MEMORY_CAPACITY = 4000  # the capacity of the memory
+MEMORY_CAPACITY = 500  # the capacity of the memory
 # N_STATE = 4  # the number of states that can be observed from environment
 # N_ACTION = 3  # the number of action that the agent should have
 # N_CHANNEL = 6
@@ -84,6 +84,18 @@ class DDQN(object):
         self.target_model_save_path = './model_targetV2.pt'
         self.test_mode = test
         self.var_eps = var_eps
+
+    def action_value(self, state):
+        state = torch.unsqueeze(torch.tensor(state), dim=0)
+        # here directly output the action value
+        return self.policy_net.forward(state)
+
+    def MO_action_selection(self, action_set, state):
+        state = torch.unsqueeze(torch.tensor(state), dim=0)
+        action_value = self.policy_net.forward(state)
+
+
+
 
     def select_action(self, state):
 

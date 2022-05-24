@@ -12,7 +12,9 @@ from scenic.core.errors import RuntimeParseError, InvalidScenarioError
 from scenic.core.vectors import Vector
 from RL_agent.DDQN import *
 
-n_action = 5
+from RL_agent.ACTION_SELECTION import *
+
+n_action = 9
 n_state_speed = 2
 n_state_path = 10
 n_state_collision = 10
@@ -24,8 +26,11 @@ simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/
 # define differnet RL agent for different objectives
 RL_speed = DDQN(n_state=n_state_speed, n_action=n_action)
 RL_path = DDQN(n_state=n_state_path, n_action=n_action)
-RL_collsion = DDQN(n_state=n_state_collision, n_action=n_action)
-maxSteps = None
+agents_list = [RL_path, RL_speed]
+threshold_list = [2, 2]
+# used to store a values from differnt objectives
+Q_list = []
+maxSteps = 400
 
 def train(episodes = 100):
     for i in range(episodes):
@@ -45,8 +50,7 @@ def train(episodes = 100):
             # properties during setup
             simulation.updateObjects()
             ###################################################################################
-            current_state = simulation.get_state()
-            speed_state = current_state[-2:]
+            state_list = [simulation.get_state(), simulation.get_state()[-2:]]
             done = False
             epi_reward = 0
             ###################################################################################
@@ -105,22 +109,30 @@ def train(episodes = 100):
                 simulation.executeActions(allActions)
 
                 ####################################################################
-                action = RL_collsion.select_action(current_state)
-                action2 = RL_path.select_action(current_state)
-                action3 = RL_speed.select_action(current_state[-2:])
+                Q_list = []
+                # this part is used to obtain the q vlaue of different RL agent
+                for i in range(len(agents_list)):
+                    #state for current RL agent
+                    agent_state = state_list[i]
+                    current_agent = agents_list[i]
+                    current_q = current_agent.action_value(agent_state)
+                    Q_list.append(current_q)
+                action_seq = action_selection(q_list=Q_list, threshold_list=threshold_list, action_set=np.array(list(range(9))))
+                # the final action will be decided by last action in the list
+                action = action_seq[-1]
                 # Run the simulation for a single step and read its state back into Scenic
-                new_state, reward, done, _ = simulation.step(action=action)
-                RL_collsion.store_transition(current_state, action, reward[0], new_state, done)
-                RL_path.store_transition(current_state, action, reward[1], new_state, done)
-                RL_speed.store_transition(current_state[-2:], action, reward[2], new_state[-2:], done)
-
-                current_state = new_state
-                if RL_collsion.memory_counter > MEMORY_CAPACITY:
-                    RL_collsion.optimize_model()
+                new_state, reward_list, done, _ = simulation.step(action=action) # here need to notice that the reward value here will be a list
+                RL_path.store_transition(state_list[0], action_seq[0], reward_list[0], new_state, done)
+                RL_speed.store_transition(state_list[1], action_seq[1], reward_list[1], new_state[-2:], done)
+                # update the state velue
+                state_list = [new_state, new_state[-2:]]
+                if agents_list[0].memory_counter > MEMORY_CAPACITY:
+                    print('training')
                     RL_path.optimize_model()
                     RL_speed.optimize_model()
                 if done:
-                    print(reward)
+                    print(reward_list)
+                    break
 
                 simulation.updateObjects()
                 simulation.currentTime += 1

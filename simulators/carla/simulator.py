@@ -137,10 +137,10 @@ class CarlaSimulation(DrivingSimulation):
 
 				# add collision sensor to the ego vehicle
 				# osition of the collision sensor
-				# transform = carla.Transform(carla.Location(x=2.5, z=0.7))
-				# collision_sensor = self.blueprintLib.find("sensor.other.collision")
-				# self.collision_sensor = self.world.spawn_actor(collision_sensor, transform, attach_to=carlaActor)
-				# self.collision_sensor.listen(lambda event: self.collision_data(event))
+				transform = carla.Transform(carla.Location(x=2.5, z=0.7))
+				collision_sensor = self.blueprintLib.find("sensor.other.collision")
+				self.collision_sensor = self.world.spawn_actor(collision_sensor, transform, attach_to=carlaActor)
+				self.collision_sensor.listen(lambda event: self.collision_data(event))
 
 				# Set up camera manager and collision sensor for ego
 				if self.render:
@@ -184,22 +184,29 @@ class CarlaSimulation(DrivingSimulation):
 	def speed_reward_test(self,ego_speed, speed_limit):
 		vehicle_vel = math.sqrt(ego_speed[0] ** 2 + ego_speed[1] ** 2)
 		current_speed = 3.6 * vehicle_vel
-		# if have collision risk, the vehicle speed need to be smaller than speed limit
-		if speed_limit == 0:
-			if current_speed == 0.0:
-				reward = 0
-			else:
-				reward = -100
-		# elif speed_limit == 60:
-		#     reward = - ((current_speed - speed_limit) ** 2 - 25) * 0.05
-
-		elif current_speed > speed_limit:
+		if current_speed > speed_limit:
 			reward = - (current_speed - speed_limit) ** 2 * 0.05
 		else:
 			reward = current_speed / (speed_limit + 0.1)
-		# reward = 0
 
 		return reward
+	def path_following_reward(self, trace, ego_location):
+		# there will have two parts to describe the path_following accuracy
+		# part1 the distance between the vehicle and dirving route
+		# part2 the angle between the vehicle heading direction and the route vector
+		distance_bound = 0.5 #m here is the tolerance of the distance error
+		# calculate the distance between vehicle position and the current trace
+		point1 = trace[0]
+		point2 = trace[1]
+		A = point2[1] - point1[1]
+		B = point1[0] - point2[0]
+		C = (point1[1] - point2[1]) * point1[0] + (point2[0] - point1[0]) * point1[1]
+		distance = np.abs(A * ego_location[0] + B * ego_location[1] + C) / (np.sqrt(A**2 + B **2))
+		distance_error = (distance_bound - distance) / distance_bound
+
+		return distance_error
+
+
 
 	def destination_reward_test(self, destination, ego_location):
 		return math.sqrt(
@@ -266,15 +273,23 @@ class CarlaSimulation(DrivingSimulation):
 	def step(self, action):
 		# defination of different actions
 		if action == 0:
-			self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0.0, steer=-1.0))
-		elif action == 1:
-			self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0.0, steer=1.0))
-		elif action == 2:
 			self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=1.0))
+		elif action == 1:
+			self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0.5))
+		elif action == 2:
+			self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0.2))
 		elif action == 3:
-			self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0.0))
+			self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0, brake=0))
 		elif action == 4:
+			self.ego.carlaActor.apply_control(carla.VehicleControl(brake=0.2))
+		elif action == 5:
+			self.ego.carlaActor.apply_control(carla.VehicleControl(brake=0.5))
+		elif action == 6:
 			self.ego.carlaActor.apply_control(carla.VehicleControl(brake=1.0))
+		elif action == 7:
+			self.ego.carlaActor.apply_control(carla.VehicleControl(steer=-1.0))
+		elif action == 8:
+			self.ego.carlaActor.apply_control(carla.VehicleControl(steer=1.0))
 
 		# the env information
 		trace = self.trace_route(waypoint_mode=False)
@@ -286,13 +301,14 @@ class CarlaSimulation(DrivingSimulation):
 			print(self.collision_history[0])
 			done = True
 			print("last_action:", action)
-			rc = -1000
+			rp = -1000
+			rv = 0
 		else:
 			done = False
-			rc = 0
 			rv = self.speed_reward_test(ego_speed, self.speed_limit)
-			rp = self.destination_reward_test(destination, ego_location)
-		reward = [rc, rv, rp]
+			rp = self.path_following_reward(trace=trace, ego_location=ego_location)
+			print(rp)
+		reward = [rp, rv]
 ############################################################
 		# Run simulation for one timestep
 		self.world.tick()
