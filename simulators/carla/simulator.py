@@ -298,7 +298,6 @@ class CarlaSimulation(DrivingSimulation):
 		destination = trace[-1]
 		if len(self.collision_history) != 0:
 			print("collision")
-			print(self.collision_history[0])
 			done = True
 			print("last_action:", action)
 			rc = -10
@@ -309,8 +308,7 @@ class CarlaSimulation(DrivingSimulation):
 			rc = 0
 			rv = self.speed_reward_test(ego_speed, self.speed_limit)
 			rp = self.path_following_reward(trace=trace, ego_location=ego_location)
-			print(rp)
-		reward = [rc, rp, rv]
+		reward = np.array([rc, rp, rv])
 ############################################################
 		# Run simulation for one timestep
 		self.world.tick()

@@ -31,10 +31,11 @@ agents_list = [RL_collision, RL_path, RL_speed]
 threshold_list = [2, 2, 2]
 # used to store a values from differnt objectives
 Q_list = []
-maxSteps = 400
+maxSteps = 800
 
-def train(episodes = 100):
-    for i in range(episodes):
+
+def train(episodes=100):
+    for episode in range(episodes):
         scene, _ = scenario.generate()
         simulation = simulator.createSimulation(scene)
 
@@ -53,7 +54,7 @@ def train(episodes = 100):
             ###################################################################################
             state_list = [simulation.get_state(), simulation.get_state(), simulation.get_state()[-2:]]
             done = False
-            epi_reward = 0
+            epi_reward = np.zeros(len(agents_list))
             ###################################################################################
             # Run simulation
             assert simulation.currentTime == 0
@@ -113,29 +114,37 @@ def train(episodes = 100):
                 Q_list = []
                 # this part is used to obtain the q vlaue of different RL agent
                 for i in range(len(agents_list)):
-                    #state for current RL agent
+                    # state for current RL agent
                     agent_state = state_list[i]
                     current_agent = agents_list[i]
                     current_q = current_agent.action_value(agent_state)
                     Q_list.append(current_q)
-                action_seq = action_selection(q_list=Q_list, threshold_list=threshold_list, action_set=np.array(list(range(9))))
+
+                action_seq = action_selection(q_list=Q_list, threshold_list=threshold_list,
+                                              action_set=np.array(list(range(9))), current_eps=episode)
+                if simulation.currentTime % 100 == 0:
+                    print(action_seq)
                 # the final action will be decided by last action in the list
                 action = action_seq[-1]
                 # Run the simulation for a single step and read its state back into Scenic
-                new_state, reward_list, done, _ = simulation.step(action=action) # here need to notice that the reward value here will be a list
+                new_state, reward_list, done, _ = simulation.step(
+                    action=action)  # here need to notice that the reward value here will be a list
                 new_state_list = [new_state, new_state, new_state[-2:]]
+                # here we got tge cumulative reward of the current episode
+                epi_reward += reward_list
                 for i in range(len(agents_list)):
-                    agents_list[i].store_transition(state_list[i], action_seq[i], reward_list[i], new_state_list[i], done)
+                    agents_list[i].store_transition(state_list[i], action_seq[i], reward_list[i], new_state_list[i],
+                                                    done)
                     # RL_path.store_transition(state_list[0], action_seq[0], reward_list[0], new_state, done)
                     # RL_speed.store_transition(state_list[1], action_seq[1], reward_list[1], new_state[-2:], done)
                 # update the state velue
                 state_list = new_state_list
                 if agents_list[0].memory_counter > MEMORY_CAPACITY:
-                    print('training')
                     for agent in agents_list:
                         agent.optimize_model()
                 if done:
                     print(reward_list)
+                    reward_list.append(epi_reward / simulation.currentTime)
                     break
 
                 simulation.updateObjects()
@@ -147,6 +156,15 @@ def train(episodes = 100):
 
             if terminationReason is None:
                 terminationReason = f'reached time limit ({maxSteps} steps)'
+            if episode % 10 == 0:
+                print("current_epi:", episode)
+                print(epi_reward / simulation.currentTime)
+            if episode % 100 == 0:
+                for j in range(len(agents_list)):
+                    print("saving model")
+                    agents_list[j].save_model("./policy_agent_" + str(j) + "_episode_" + str(i) + ".pt",
+                                              "./target_agent_" + str(j) + "_episode_" + str(i) + ".pt")
+
         finally:
             simulation.destroy()
             for obj in simulation.scene.objects:
@@ -156,8 +174,11 @@ def train(episodes = 100):
             for monitor in simulation.scene.monitors:
                 monitor.stop()
             veneer.endSimulation(simulation)
-train(100)
-        # simulation.run(maxSteps=None)
-    #         result = simulation.trajectory
-    #         for i, state in enumerate(result):
-    #                 egoPos = state
+
+
+train(2000)
+
+# simulation.run(maxSteps=None)
+#         result = simulation.trajectory
+#         for i, state in enumerate(result):
+#                 egoPos = state
