@@ -13,6 +13,7 @@ from scenic.core.vectors import Vector
 from RL_agent.DDQN import *
 
 from RL_agent.ACTION_SELECTION import *
+import time
 
 n_action = 9
 n_state_speed = 2
@@ -44,6 +45,12 @@ def train(episodes=100):
         # Initialize dynamic scenario
         veneer.beginSimulation(simulation)
         dynamicScenario = simulation.scene.dynamicScenario
+        ##########################################################
+        start_time = time.time()
+        epi_reward = np.zeros(len(agents_list))
+        #########################################################
+
+
         try:
             # Initialize dynamic scenario
             dynamicScenario._start()
@@ -52,9 +59,8 @@ def train(episodes=100):
             # properties during setup
             simulation.updateObjects()
             ###################################################################################
+            # here get the initial state for the RL agent
             state_list = [simulation.get_state(), simulation.get_state(), simulation.get_state()[-2:]]
-            done = False
-            epi_reward = np.zeros(len(agents_list))
             ###################################################################################
             # Run simulation
             assert simulation.currentTime == 0
@@ -122,8 +128,8 @@ def train(episodes=100):
 
                 action_seq = action_selection(q_list=Q_list, threshold_list=threshold_list,
                                               action_set=np.array(list(range(9))), current_eps=episode)
-                if simulation.currentTime % 100 == 0:
-                    print(action_seq)
+                if simulation.currentTime % (maxSteps / 2) == 0:
+                    print("aaction_seq: ", action_seq)
                 # the final action will be decided by last action in the list
                 action = action_seq[-1]
                 # Run the simulation for a single step and read its state back into Scenic
@@ -156,16 +162,21 @@ def train(episodes=100):
 
             if terminationReason is None:
                 terminationReason = f'reached time limit ({maxSteps} steps)'
+
+        finally:
+            ##############################################################################
+            epi_end = time.time()
+            epi_dur = epi_end - start_time
+            print("current_epi:", episode)
             if episode % 10 == 0:
-                print("current_epi:", episode)
+                print("current_epi:", episode, "last_epi_duration:", epi_dur)
                 print(epi_reward / simulation.currentTime)
             if episode % 100 == 0:
                 for j in range(len(agents_list)):
-                    print("saving model")
-                    agents_list[j].save_model("./policy_agent_" + str(j) + "_episode_" + str(i) + ".pt",
-                                              "./target_agent_" + str(j) + "_episode_" + str(i) + ".pt")
-
-        finally:
+                     print("saving model")
+                     agents_list[j].save_model("./policy_agent_" + str(j) + "_episode_" + str(episode) + ".pt",
+                                               "./target_agent_" + str(j) + "_episode_" + str(episode) + ".pt")
+            ##############################################################################
             simulation.destroy()
             for obj in simulation.scene.objects:
                 disableDynamicProxyFor(obj)
