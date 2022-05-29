@@ -51,7 +51,8 @@ adv_spawn_pt = OrientedPoint in adv_maneuver.startLane.centerline
 ego = Car at ego_spawn_pt,
     with blueprint EGO_MODEL,
     with trajectory ego_trajectory,
-    with behavior EgoBehavior(EGO_SPEED, ego_trajectory)
+    with behavior EgoBehavior(EGO_SPEED, ego_trajectory),
+    with rolename "ego_car"
 
 adversary = Car at adv_spawn_pt,
     with behavior AdversaryBehavior(adv_trajectory)

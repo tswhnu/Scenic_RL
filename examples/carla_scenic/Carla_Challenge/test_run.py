@@ -129,12 +129,13 @@ def train(episodes=100):
                 action_seq = action_selection(q_list=Q_list, threshold_list=threshold_list,
                                               action_set=np.array(list(range(9))), current_eps=episode)
                 if simulation.currentTime % (maxSteps / 2) == 0:
-                    print("aaction_seq: ", action_seq)
+                    print("action_seq: ", action_seq)
                 # the final action will be decided by last action in the list
                 action = action_seq[-1]
                 # Run the simulation for a single step and read its state back into Scenic
                 new_state, reward_list, done, _ = simulation.step(
                     action=action)  # here need to notice that the reward value here will be a list
+                print("len: new state:", len(new_state))
                 new_state_list = [new_state, new_state, new_state[-2:]]
                 # here we got tge cumulative reward of the current episode
                 epi_reward += reward_list
@@ -171,7 +172,7 @@ def train(episodes=100):
             if episode % 10 == 0:
                 print("current_epi:", episode, "last_epi_duration:", epi_dur)
                 print(epi_reward / simulation.currentTime)
-            if episode % 100 == 0:
+            if episode % 30 == 0:
                 for j in range(len(agents_list)):
                      print("saving model")
                      agents_list[j].save_model("./policy_agent_" + str(j) + "_episode_" + str(episode) + ".pt",
