@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import scenic
 from scenic.simulators.carla.simulator import CarlaSimulator
 import scenic.syntax.veneer as veneer
@@ -24,23 +25,27 @@ scenario = scenic.scenarioFromFile('carlaChallenge10_original.scenic',
                                    model='scenic.simulators.carla.model')
 simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
 
-# define differnet RL agent for different objectives
-RL_speed = DDQN(n_state=n_state_speed, n_action=n_action)
-RL_path = DDQN(n_state=n_state_path, n_action=n_action)
-RL_collision = DDQN(n_state=n_state_collision, n_action=n_action)
-agents_list = [RL_collision, RL_path, RL_speed]
-threshold_list = [2, 2, 2]
-# used to store a values from differnt objectives
-Q_list = []
-maxSteps = 800
 
 
-def train(episodes=100):
+
+
+def train(episodes=100, maxSteps = 800):
+    ####################################################################
+    threshold_list = [2, 2]
+    # define differnet RL agent for different objectives
+    RL_speed = DDQN(n_state=n_state_speed, n_action=n_action)
+    RL_path = DDQN(n_state=n_state_path, n_action=n_action)
+    agents_list = [RL_path, RL_speed]
+    reward_list = []
+    ######################################################################
+
+
     for episode in range(episodes):
         scene, _ = scenario.generate()
         simulation = simulator.createSimulation(scene)
 
-        trajectory = simulation.trajectory
+        trajectory = []
+        route = []
         actionSequence = []
         # Initialize dynamic scenario
         veneer.beginSimulation(simulation)
@@ -60,7 +65,9 @@ def train(episodes=100):
             simulation.updateObjects()
             ###################################################################################
             # here get the initial state for the RL agent
-            state_list = [simulation.get_state(), simulation.get_state(), simulation.get_state()[-2:]]
+            initial_state = simulation.get_state()
+            state_list = [initial_state, initial_state[-2:]]
+            trajectory.append([initial_state[-4], initial_state[-3]])
             ###################################################################################
             # Run simulation
             assert simulation.currentTime == 0
@@ -84,10 +91,12 @@ def train(episodes=100):
                 # now safe to terminate if the top-level scenario has finished
                 # or a monitor requested termination
                 if terminationReason is not None:
-                    break
+                    done = True
+                    print(terminationReason)
                 terminationReason = dynamicScenario._checkSimulationTerminationConditions()
                 if terminationReason is not None:
-                    break
+                    done = True
+                    print(terminationReason)
 
                 # Compute the actions of the agents in this time step
                 allActions = OrderedDict()
@@ -108,7 +117,8 @@ def train(episodes=100):
                                                    f' action(s) {actions}')
                     allActions[agent] = actions
                 if terminationReason is not None:
-                    break
+                    done = True
+                    print(terminationReason)
 
                 # Execute the actions
                 if simulation.verbosity >= 3:
@@ -133,14 +143,13 @@ def train(episodes=100):
                 # the final action will be decided by last action in the list
                 action = action_seq[-1]
                 # Run the simulation for a single step and read its state back into Scenic
-                new_state, reward_list, done, _ = simulation.step(
-                    action=action)  # here need to notice that the reward value here will be a list
-                print("len: new state:", len(new_state))
-                new_state_list = [new_state, new_state, new_state[-2:]]
+                new_state, reward, done, _ = simulation.step(
+                    action=action, last_position = trajectory[-1])  # here need to notice that the reward value here will be a list
+                new_state_list = [new_state, new_state[-2:]]
                 # here we got tge cumulative reward of the current episode
-                epi_reward += reward_list
+                epi_reward += reward
                 for i in range(len(agents_list)):
-                    agents_list[i].store_transition(state_list[i], action_seq[i], reward_list[i], new_state_list[i],
+                    agents_list[i].store_transition(state_list[i], action_seq[i], reward[i], new_state_list[i],
                                                     done)
                     # RL_path.store_transition(state_list[0], action_seq[0], reward_list[0], new_state, done)
                     # RL_speed.store_transition(state_list[1], action_seq[1], reward_list[1], new_state[-2:], done)
@@ -150,33 +159,44 @@ def train(episodes=100):
                     for agent in agents_list:
                         agent.optimize_model()
                 if done:
-                    print(reward_list)
-                    reward_list.append(epi_reward / simulation.currentTime)
+                    print("reward_info: ", epi_reward / simulation.currentTime)
+                    # reward_list.append(epi_reward / simulation.currentTime)
+                    # reward_array = np.array(reward_list)
+                    # np.save("./log/reward_list" + str(episode) + ".npy", reward_array)
                     break
 
                 simulation.updateObjects()
                 simulation.currentTime += 1
 
                 # Save the new state
-                trajectory.append(simulation.currentState())
+                ##########################################################
+                trajectory.append([new_state[-4], new_state[-3]])
+                # route.append([new_state[0], new_state[1]])
                 actionSequence.append(allActions)
 
             if terminationReason is None:
                 terminationReason = f'reached time limit ({maxSteps} steps)'
 
         finally:
+            # route = np.array(route)
+            # trajectory = np.array(trajectory)
+            # np.save("./log/vehicle_trajectory" + str(episode) + ".npy", trajectory)
+            # np.save("./log/reference_route" + str(episode) + ".npy", route)
+            # plt.plot(route[:, 0], route[:, 1])
+            # plt.plot(trajectory[:, 0], trajectory[:, 1])
+            # plt.show()
+
             ##############################################################################
             epi_end = time.time()
             epi_dur = epi_end - start_time
-            print("current_epi:", episode)
             if episode % 10 == 0:
                 print("current_epi:", episode, "last_epi_duration:", epi_dur)
                 print(epi_reward / simulation.currentTime)
             if episode % 30 == 0:
                 for j in range(len(agents_list)):
                      print("saving model")
-                     agents_list[j].save_model("./policy_agent_" + str(j) + "_episode_" + str(episode) + ".pt",
-                                               "./target_agent_" + str(j) + "_episode_" + str(episode) + ".pt")
+                     agents_list[j].save_model("./trained_model/policy_agent_" + str(j) + "_episode_" + str(episode) + ".pt",
+                                               "./trained_model/target_agent_" + str(j) + "_episode_" + str(episode) + ".pt")
             ##############################################################################
             simulation.destroy()
             for obj in simulation.scene.objects:

@@ -1,4 +1,5 @@
 """Simulator interface for CARLA."""
+import numpy
 import numpy as np
 
 try:
@@ -22,6 +23,7 @@ from agents.navigation.global_route_planner import GlobalRoutePlanner
 from bird_view.birdview_semantic import *
 from matplotlib import pyplot as plt
 import numpy as np
+from scenic.simulators.carla.utils.Reward_functions import *
 #########
 from scenic.domains.driving.simulators import DrivingSimulator, DrivingSimulation
 from scenic.core.simulators import SimulationCreationError
@@ -33,7 +35,7 @@ import scenic.simulators.carla.utils.visuals as visuals
 class CarlaSimulator(DrivingSimulator):
     """Implementation of `Simulator` for CARLA."""
 
-    def __init__(self, carla_map, map_path, address='127.0.0.1', port=2000, timeout=10,
+    def __init__(self, carla_map, map_path, address='127.0.0.1', port=2000, timeout=15,
                  render=True, record='', timestep=0.1):
         super().__init__()
         verbosePrint('Connecting to CARLA...')
@@ -54,6 +56,7 @@ class CarlaSimulator(DrivingSimulator):
 
         # Set to synchronous with fixed timestep
         settings = self.world.get_settings()
+        settings.no_rendering_mode = True
         settings.synchronous_mode = True
         settings.fixed_delta_seconds = timestep  # NOTE: Should not exceed 0.1
         self.world.apply_settings(settings)
@@ -179,38 +182,21 @@ class CarlaSimulation(DrivingSimulation):
         current_location = utils.scenicToCarlaLocation(self.ego.position, world=self.world,
                                                        blueprint=self.ego.blueprint)
         trace = self.route_planner.trace_route(current_location, destination)
-        # here we pickup first n points in the waypoints list
-        trace = trace[:points_num]
+        if len(trace) < points_num:
+            for i in range(points_num - len(trace)):
+                trace.append(trace[-1])
+        else:
+            # here we pickup first n points in the waypoints list
+            trace = trace[:points_num]
         if not waypoint_mode:
             return [[i[0].transform.location.x, i[0].transform.location.y] for i in trace]
         else:
             return trace
 
-    def speed_reward_test(self, ego_speed, speed_limit):
-        vehicle_vel = math.sqrt(ego_speed[0] ** 2 + ego_speed[1] ** 2)
-        current_speed = 3.6 * vehicle_vel
-        if current_speed > speed_limit:
-            reward = - (current_speed - speed_limit) ** 2 * 0.05
-        else:
-            reward = current_speed / (speed_limit + 0.1)
-
-        return reward
-
-    def path_following_reward(self, trace, ego_location):
-        # there will have two parts to describe the path_following accuracy
-        # part1 the distance between the vehicle and dirving route
-        # part2 the angle between the vehicle heading direction and the route vector
-        distance_bound = 0.5  # m here is the tolerance of the distance error
-        # calculate the distance between vehicle position and the current trace
-        point1 = trace[0]
-        point2 = trace[1]
-        A = point2[1] - point1[1]
-        B = point1[0] - point2[0]
-        C = (point1[1] - point2[1]) * point1[0] + (point2[0] - point1[0]) * point1[1]
-        distance = np.abs(A * ego_location[0] + B * ego_location[1] + C) / (np.sqrt(A ** 2 + B ** 2))
-        distance_error = (distance_bound - distance) / distance_bound
-
-        return distance_error
+    def draw_trace(self, ego_vehicle_location, trace):
+        ego_vehicle_location = np.array(ego_vehicle_location)
+        trace = np.array(trace)
+        new_trace = trace - ego_vehicle_location
 
     def destination_reward_test(self, destination, ego_location):
         return math.sqrt(
@@ -220,6 +206,7 @@ class CarlaSimulation(DrivingSimulation):
         trace = np.array(self.trace_route(waypoint_mode=False)).reshape(-1)
         ego_location = np.array([self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y])
         ego_speed = np.array([self.ego.carlaActor.get_velocity().x, self.ego.carlaActor.get_velocity().y])
+
         return np.append(trace, [ego_location, ego_speed]).astype(np.single)
 
     def collision_data(self, event):
@@ -276,7 +263,7 @@ class CarlaSimulation(DrivingSimulation):
                     obj.carlaActor.apply_control(ctrl)
                     obj._control = None
 
-    def step(self, action):
+    def step(self, action, last_position):
         # defination of different actions
         if action == 0:
             self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=1.0))
@@ -305,16 +292,12 @@ class CarlaSimulation(DrivingSimulation):
         if len(self.collision_history) != 0:
             print("collision")
             done = True
-            print("last_action:", action)
-            rc = -10
-            rv = self.speed_reward_test(ego_speed, self.speed_limit)
-            rp = self.path_following_reward(trace=trace, ego_location=ego_location)
+
         else:
             done = False
-            rc = 0
-            rv = self.speed_reward_test(ego_speed, self.speed_limit)
-            rp = self.path_following_reward(trace=trace, ego_location=ego_location)
-        reward = np.array([rc, rp, rv])
+        rv = speed_reward(ego_speed, self.speed_limit, 5)
+        rp = pathfollowing_reward(ego_car_speed=ego_speed, ego_car_location=ego_location, last_ego_car_location=last_position, trace=trace)
+        reward = np.array([rp, rv])
         ############################################################
         # Run simulation for one timestep
         self.world.tick()
