@@ -4,7 +4,7 @@ from scenic.simulators.carla.simulator import CarlaSimulator
 import scenic.syntax.veneer as veneer
 import types
 from collections import OrderedDict
-
+from memory_profiler import profile
 from scenic.core.object_types import (enableDynamicProxyFor, setDynamicProxyFor,
                                       disableDynamicProxyFor)
 from scenic.core.distributions import RejectionException
@@ -21,36 +21,34 @@ n_state_speed = 2
 n_state_path = 10
 n_state_collision = 10
 
+#####
+
 scenario = scenic.scenarioFromFile('carlaChallenge10_original.scenic',
                                    model='scenic.simulators.carla.model')
 simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
-
-
+# the parameters in the threshold list define the range of accpetable action value
+threshold_list = [3, 2]
+# define differnet RL agent for different objectives
+RL_speed = DDQN(n_state=n_state_speed, n_action=n_action)
+RL_path = DDQN(n_state=n_state_path, n_action=n_action)
+agents_list = [RL_path, RL_speed]
+reward_list = []
 
 
 
 def train(episodes=100, maxSteps = 800):
-    ####################################################################
-    threshold_list = [2, 2]
-    # define differnet RL agent for different objectives
-    RL_speed = DDQN(n_state=n_state_speed, n_action=n_action)
-    RL_path = DDQN(n_state=n_state_path, n_action=n_action)
-    agents_list = [RL_path, RL_speed]
-    reward_list = []
-    ######################################################################
-
-
     for episode in range(episodes):
         scene, _ = scenario.generate()
         simulation = simulator.createSimulation(scene)
 
-        trajectory = []
-        route = []
+        last_position = None
         actionSequence = []
         # Initialize dynamic scenario
         veneer.beginSimulation(simulation)
         dynamicScenario = simulation.scene.dynamicScenario
         ##########################################################
+        trajectory = []
+        route = []
         start_time = time.time()
         epi_reward = np.zeros(len(agents_list))
         #########################################################
@@ -67,7 +65,7 @@ def train(episodes=100, maxSteps = 800):
             # here get the initial state for the RL agent
             initial_state = simulation.get_state()
             state_list = [initial_state, initial_state[-2:]]
-            trajectory.append([initial_state[-4], initial_state[-3]])
+            last_position = [initial_state[-4], initial_state[-3]]
             ###################################################################################
             # Run simulation
             assert simulation.currentTime == 0
@@ -138,13 +136,13 @@ def train(episodes=100, maxSteps = 800):
 
                 action_seq = action_selection(q_list=Q_list, threshold_list=threshold_list,
                                               action_set=np.array(list(range(9))), current_eps=episode)
-                if simulation.currentTime % (maxSteps / 2) == 0:
-                    print("action_seq: ", action_seq)
+                # if simulation.currentTime % (maxSteps / 2) == 0:
+                #     print("action_seq: ", action_seq)
                 # the final action will be decided by last action in the list
                 action = action_seq[-1]
                 # Run the simulation for a single step and read its state back into Scenic
                 new_state, reward, done, _ = simulation.step(
-                    action=action, last_position = trajectory[-1])  # here need to notice that the reward value here will be a list
+                    action=action, last_position = last_position)  # here need to notice that the reward value here will be a list
                 new_state_list = [new_state, new_state[-2:]]
                 # here we got tge cumulative reward of the current episode
                 epi_reward += reward
@@ -160,9 +158,9 @@ def train(episodes=100, maxSteps = 800):
                         agent.optimize_model()
                 if done:
                     print("reward_info: ", epi_reward / simulation.currentTime)
-                    # reward_list.append(epi_reward / simulation.currentTime)
-                    # reward_array = np.array(reward_list)
-                    # np.save("./log/reward_list" + str(episode) + ".npy", reward_array)
+                    reward_list.append(epi_reward / simulation.currentTime)
+                    reward_array = np.array(reward_list)
+                    np.save("./log/reward_list" + str(episode) + ".npy", reward_array)
                     break
 
                 simulation.updateObjects()
@@ -170,22 +168,22 @@ def train(episodes=100, maxSteps = 800):
 
                 # Save the new state
                 ##########################################################
+                last_position = [new_state[-4], new_state[-3]]
                 trajectory.append([new_state[-4], new_state[-3]])
-                # route.append([new_state[0], new_state[1]])
+                route.append([new_state[0], new_state[1]])
                 actionSequence.append(allActions)
 
             if terminationReason is None:
                 terminationReason = f'reached time limit ({maxSteps} steps)'
 
         finally:
-            # route = np.array(route)
-            # trajectory = np.array(trajectory)
-            # np.save("./log/vehicle_trajectory" + str(episode) + ".npy", trajectory)
-            # np.save("./log/reference_route" + str(episode) + ".npy", route)
+            route = np.array(route)
+            trajectory = np.array(trajectory)
+            np.save("./log/vehicle_trajectory" + str(episode) + ".npy", trajectory)
+            np.save("./log/reference_route" + str(episode) + ".npy", route)
             # plt.plot(route[:, 0], route[:, 1])
             # plt.plot(trajectory[:, 0], trajectory[:, 1])
             # plt.show()
-
             ##############################################################################
             epi_end = time.time()
             epi_dur = epi_end - start_time

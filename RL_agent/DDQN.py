@@ -14,7 +14,7 @@ LR = 0.001  # learning rate
 EPSILON = 0.6  # greedy algorithm
 GAMMA = 0.9  # reward discount
 TARGET_UPDATE = 100  # update the target network after training
-MEMORY_CAPACITY = 4000  # the capacity of the memory
+MEMORY_CAPACITY = 2000  # the capacity of the memory
 # N_STATE = 4  # the number of states that can be observed from environment
 # N_ACTION = 3  # the number of action that the agent should have
 # N_CHANNEL = 6
@@ -24,7 +24,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 EPS_START = 0.9
 EPS_END = 0.05
-EPS_DECAY = 4000
+EPS_DECAY = 100
 
 
 class Linear_Net(nn.Module):
