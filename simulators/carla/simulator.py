@@ -9,7 +9,7 @@ except ImportError as e:
 
 import math
 import os
-
+import time
 from scenic.syntax.translator import verbosity
 
 if verbosity == 0:  # suppress pygame advertisement at zero verbosity
@@ -36,7 +36,7 @@ class CarlaSimulator(DrivingSimulator):
     """Implementation of `Simulator` for CARLA."""
 
     def __init__(self, carla_map, map_path, address='127.0.0.1', port=2000, timeout=20,
-                 render=True, record='', timestep=0.1):
+                 render=False, record='', timestep=0.1):
         super().__init__()
         verbosePrint('Connecting to CARLA...')
         self.client = carla.Client(address, port)
@@ -56,7 +56,7 @@ class CarlaSimulator(DrivingSimulator):
 
         # Set to synchronous with fixed timestep
         settings = self.world.get_settings()
-        settings.no_rendering_mode = True
+        settings.no_rendering_mode = False
         settings.synchronous_mode = True
         settings.fixed_delta_seconds = timestep  # NOTE: Should not exceed 0.1
         self.world.apply_settings(settings)
@@ -92,6 +92,7 @@ class CarlaSimulation(DrivingSimulation):
         self.tm = tm
 
         ##################
+        self.spectator = self.world.get_spectator()
         self.collision_history = []
         self.speed_limit = 60  # km/h
         ##################
@@ -303,6 +304,9 @@ class CarlaSimulation(DrivingSimulation):
         self.world.tick()
         new_state = self.get_state()
         # Render simulation
+        spectator_transform = self.ego.carlaActor.get_transform()
+        spectator_transform.location += carla.Location(x=-2, y=0, z=2.0)
+        self.spectator.set_transform(spectator_transform)
         if self.render:
             # self.hud.tick(self.world, self.ego, self.displayClock)
             self.cameraManager.render(self.display)

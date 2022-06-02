@@ -14,7 +14,7 @@ LR = 0.001  # learning rate
 EPSILON = 0.6  # greedy algorithm
 GAMMA = 0.9  # reward discount
 TARGET_UPDATE = 100  # update the target network after training
-MEMORY_CAPACITY = 2000  # the capacity of the memory
+MEMORY_CAPACITY = 4000  # the capacity of the memory
 # N_STATE = 4  # the number of states that can be observed from environment
 # N_ACTION = 3  # the number of action that the agent should have
 # N_CHANNEL = 6
@@ -68,7 +68,7 @@ class CNN(nn.Module):
 
 
 class DDQN(object):
-    def __init__(self, n_state = None, n_action = None, test=False, var_eps=True):
+    def __init__(self, n_state = None, n_action = None, test=False, var_eps=True, agent_name = None):
         self.policy_net, self.target_net = Linear_Net(n_state, n_action).to(device), \
                                            Linear_Net(n_state, n_action).to(device)
         self.n_state = n_state
@@ -78,12 +78,11 @@ class DDQN(object):
         self.memory = deque(maxlen=MEMORY_CAPACITY)
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=LR)
         self.loss_func = nn.MSELoss()
-        self.eval_model_load_path = './model_03/policy_net900.pt'
-        self.target_model_load_path = './model_03/target_net900.pt'
-        self.eval_model_save_path = './model_evalV2.pt'
-        self.target_model_save_path = './model_targetV2.pt'
+        self.eval_model_load_path = './agent_' + agent_name + '/policy_agent_' + str(agent_name) + '_episode_150.pt'
+        self.target_model_load_path ='./agent_' + agent_name + '/target_agent_' + str(agent_name) + '_episode_150.pt'
         self.test_mode = test
         self.var_eps = var_eps
+        self.agent_name = agent_name
 
     def action_value(self, state):
         state = torch.unsqueeze(torch.tensor(state), dim=0)
@@ -107,6 +106,7 @@ class DDQN(object):
         else:
             E_thresh = EPS_END + (EPS_START - EPS_END) * \
                        math.exp(-1. * self.learn_step / EPS_DECAY)
+        print(E_thresh)
         if self.test_mode:
             actions_value = self.policy_net.forward(state)
             return torch.max(actions_value, 1)[1].data.cpu().numpy()[0]
@@ -154,9 +154,9 @@ class DDQN(object):
         loss.backward()
         self.optimizer.step()
 
-    def save_model(self, policy_path, target_path):
-        torch.save(self.policy_net.state_dict(), policy_path)
-        torch.save(self.target_net.state_dict(), target_path)
+    def save_model(self, episode):
+        torch.save(self.policy_net.state_dict(), './agent_' + self.agent_name + '/target_net_' + str(episode) + '.pt')
+        torch.save(self.target_net.state_dict(), './agent_' + self.agent_name + '/target_net_' + str(episode) + '.pt')
 
     def load_model(self):
         self.policy_net.load_state_dict(torch.load(self.eval_model_load_path))
