@@ -32,14 +32,18 @@ class Linear_Net(nn.Module):
         super(Linear_Net, self).__init__()
         self.fc1 = nn.Linear(n_state, 64)
         self.fc1.weight.data.normal_(0, 0.1)
-        self.fc2 = nn.Linear(64, n_action)
+        self.fc2 = nn.Linear(64, 256)
         self.fc2.weight.data.normal_(0, 0.1)
+        self.fc3 = nn.Linear(256, n_action)
+        self.fc3.weight.data.normal_(0, 0.1)
 
     def forward(self, x):
         x = x.to(device)
         x = self.fc1(x)
         x = F.relu(x)
-        out = self.fc2(x)
+        x = self.fc2(x)
+        x = F.relu(x)
+        out = self.fc3(x)
         return out
 
 
