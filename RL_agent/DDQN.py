@@ -82,8 +82,6 @@ class DDQN(object):
         self.memory = deque(maxlen=MEMORY_CAPACITY)
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=LR)
         self.loss_func = nn.MSELoss()
-        self.eval_model_load_path = './agent_' + agent_name + '/policy_agent_' + str(agent_name) + '_episode_150.pt'
-        self.target_model_load_path ='./agent_' + agent_name + '/target_agent_' + str(agent_name) + '_episode_150.pt'
         self.test_mode = test
         self.var_eps = var_eps
         self.agent_name = agent_name
@@ -162,6 +160,6 @@ class DDQN(object):
         torch.save(self.policy_net.state_dict(), './agent_' + self.agent_name + '/target_net_' + str(episode) + '.pt')
         torch.save(self.target_net.state_dict(), './agent_' + self.agent_name + '/target_net_' + str(episode) + '.pt')
 
-    def load_model(self):
-        self.policy_net.load_state_dict(torch.load(self.eval_model_load_path))
-        self.target_net.load_state_dict(torch.load(self.target_model_load_path))
+    def load_model(self, episode):
+        self.policy_net.load_state_dict(torch.load('./agent_' + self.agent_name + '/target_net_' + str(episode) + '.pt'))
+        self.target_net.load_state_dict(torch.load('./agent_' + self.agent_name + '/target_net_' + str(episode) + '.pt'))

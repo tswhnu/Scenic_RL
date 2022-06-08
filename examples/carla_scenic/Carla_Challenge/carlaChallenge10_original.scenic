@@ -16,17 +16,6 @@ EGO_SPEED = 10
 SAFETY_DISTANCE = 20
 BRAKE_INTENSITY = 1.0
 
-##DEFINING BEHAVIORS
-behavior AdversaryBehavior(trajectory):
-    do FollowTrajectoryBehavior(trajectory=trajectory)
-
-behavior EgoBehavior(speed, trajectory):
-    try:
-        do FollowTrajectoryBehavior(target_speed=speed, trajectory=trajectory)
-        do FollowLaneBehavior(target_speed=speed)
-    interrupt when withinDistanceToAnyObjs(self, SAFETY_DISTANCE):
-        take SetBrakeAction(BRAKE_INTENSITY)
-
 ## DEFINING SPATIAL RELATIONS
 # Please refer to scenic/domains/driving/roads.py how to access detailed road infrastructure
 # 'network' is the 'class Network' object in roads.py
@@ -51,7 +40,6 @@ adv_spawn_pt = OrientedPoint in adv_maneuver.startLane.centerline
 ego = Car at ego_spawn_pt,
     with blueprint EGO_MODEL,
     with trajectory ego_trajectory,
-    with behavior EgoBehavior(EGO_SPEED, ego_trajectory),
     with rolename "ego_car"
 
 terminate when (distance to ego_spawn_pt) > 70

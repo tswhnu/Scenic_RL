@@ -215,8 +215,8 @@ n_action = 9
 n_state_list = [7, 2]
 agent_name_list = ['path', 'speed']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
-                              load_model=False)
-train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=0, maxSteps=1000, n_state_list=n_state_list)
+                              load_model=True, current_step=500)
+train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=500, maxSteps=1000, n_state_list=n_state_list)
 
 # simulation.run(maxSteps=None)
 #         result = simulation.trajectory
