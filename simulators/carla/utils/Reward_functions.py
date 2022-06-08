@@ -22,27 +22,28 @@ def speed_reward(ego_car_speed, speed_limit, tolerance=5):
         reward = -current_speed / (speed_limit + tolerance)
     return reward
 
-def pathfollowing_reward(ego_car_speed, ego_car_location, last_ego_car_location, trace, vector_mode = False):
+
+def pathfollowing_reward(ego_car_speed, ego_car_location, last_ego_car_location, trace, vector_mode=False,
+                         destination=None):
+
     ego_car_speed = math.sqrt(ego_car_speed[0] ** 2 + ego_car_speed[1] ** 2)
     # this reward will show whether the verhicle is going to the right direction
-    goal = trace[-1]
+    goal = destination
     Lt = math.sqrt((last_ego_car_location[0] - goal[0]) ** 2 + (last_ego_car_location[1] - goal[1]) ** 2)
     Lt1 = math.sqrt((ego_car_location[0] - goal[0]) ** 2 + (ego_car_location[1] - goal[1]) ** 2)
-    r_goal = (Lt -Lt1) / (ego_car_speed + 0.1)
+    r_goal = (Lt - Lt1) / (ego_car_speed + 0.1)
 
     # this reward will show the distance between the refer path and ego-vehicle
-    distance_bound = 0.5  # m here is the tolerance of the distance error
+    distance_bound = 1  # m here is the tolerance of the distance error
     # calculate the distance between vehicle position and the current trace
     point1 = trace[0]
     point2 = trace[1]
     A = point2[1] - point1[1]
     B = point1[0] - point2[0]
     C = (point1[1] - point2[1]) * point1[0] + (point2[0] - point1[0]) * point1[1]
-    distance = np.abs(A * ego_car_location[0] + B * ego_car_location[1] + C) / (np.sqrt(A ** 2 + B ** 2))
+    distance = np.abs(A * ego_car_location[0] + B * ego_car_location[1] + C) / (np.sqrt(A ** 2 + B ** 2) + 0.1)
     distance_reward = (distance_bound - distance) / distance_bound
     if vector_mode:
         return [r_goal, distance_reward]
     else:
         return r_goal + distance_reward
-
-

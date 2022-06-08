@@ -36,7 +36,7 @@ def creat_agents(n_action, n_state_list, agent_name_list, load_model=True, curre
     return agent_list
 
 
-def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=150):
+def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=150, n_state_list=None):
     scenario = scenic.scenarioFromFile('carlaChallenge10_original.scenic',
                                        model='scenic.simulators.carla.model')
     simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
@@ -59,7 +59,6 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
         ##########################################################
         start_time = time.time()
         epi_reward = np.zeros(2)
-        trajectory = []
         route = []
         #########################################################
 
@@ -72,8 +71,10 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
             simulation.updateObjects()
             ###################################################################################
             # here get the initial state for the RL agent
-            initial_state, initial_ego_position = simulation.get_state()
-            state_list = [initial_state[0:3], initial_state[-2:]]
+            initial_state= simulation.get_state()
+            initial_ego_position = np.array([simulation.ego.carlaActor.get_location().x,
+                                             simulation.ego.carlaActor.get_location().y])
+            state_list = [initial_state[0:n_state_list[0]], initial_state[-n_state_list[1]:]]
             last_position = initial_ego_position
             ###################################################################################
             # Run simulation
@@ -147,7 +148,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
                 new_state, reward, done, _ = simulation.step(
                     action=action,
                     last_position=last_position)  # here need to notice that the reward value here will be a list
-                new_state_list = [new_state[0][0:3], new_state[0][-2:]]
+                new_state_list = [new_state[0:n_state_list[0]], new_state[-n_state_list[1]:]]
                 # here we got tge cumulative reward of the current episode
                 epi_reward += reward
                 for i in range(len(RL_agents_list)):
@@ -171,7 +172,8 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
 
                 # Save the new state
                 ##########################################################
-                last_position = new_state[1]
+                last_position = np.array([simulation.ego.carlaActor.get_location().x,
+                                             simulation.ego.carlaActor.get_location().y])
                 # trajectory.append(new_state[1])
                 # route.append([new_state[0], new_state[1]])
                 actionSequence.append(allActions)
@@ -179,8 +181,9 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
         finally:
             # route = np.array(route)
             # trajectory = np.array(trajectory)
-            # np.save("./log/vehicle_trajectory" + str(episode) + ".npy", trajectory)
-            # np.save("./log/reference_route" + str(episode) + ".npy", route)
+            np.save("./log/vehicle_trajectory" + str(episode) + ".npy", simulation.driving_trajectory)
+            np.save("./log/reference_route" + str(episode) + ".npy", simulation.driving_route)
+            np.save("./log/vehicle_speed" + str(episode) + ".npy", simulation.speed_list)
             # driving_trajectory = simulation.driving_trajectory
             # plt.plot(trajectory[:, 0], trajectory[:, 1])
             # plt.scatter(simulation.ego_spawn_point[0], simulation.ego_spawn_point[1])
@@ -209,11 +212,11 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
 
 
 n_action = 9
-n_state_list = [3, 2]
+n_state_list = [7, 2]
 agent_name_list = ['path', 'speed']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
-                              load_model=True, current_step=900)
-train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=900, maxSteps=1000)
+                              load_model=False)
+train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=0, maxSteps=1000, n_state_list=n_state_list)
 
 # simulation.run(maxSteps=None)
 #         result = simulation.trajectory

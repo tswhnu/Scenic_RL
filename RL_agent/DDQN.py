@@ -9,7 +9,7 @@ from collections import deque
 import math
 
 # the defination of the hyper parameters
-BATCH_SIZE = 16  # batch size of the training data
+BATCH_SIZE = 64  # batch size of the training data
 LR = 0.001  # learning rate
 EPSILON = 0.6  # greedy algorithm
 GAMMA = 0.9  # reward discount

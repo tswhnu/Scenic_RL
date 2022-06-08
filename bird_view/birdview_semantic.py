@@ -24,4 +24,4 @@ def bird_seg(client, agent_vehicle, route_list=None, image_range=None, resolutio
     if route_list is not None:
         rgb = draw_route(rgb, route_list, agent_vehicle, image_range, resolution)
 
-    return rgb, birdview
+    return rgb
