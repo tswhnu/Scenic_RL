@@ -157,9 +157,9 @@ class DDQN(object):
         self.optimizer.step()
 
     def save_model(self, episode):
-        torch.save(self.policy_net.state_dict(), './agent_' + self.agent_name + '/target_net_' + str(episode) + '.pt')
+        torch.save(self.policy_net.state_dict(), './agent_' + self.agent_name + '/policy_net_' + str(episode) + '.pt')
         torch.save(self.target_net.state_dict(), './agent_' + self.agent_name + '/target_net_' + str(episode) + '.pt')
 
     def load_model(self, episode):
-        self.policy_net.load_state_dict(torch.load('./agent_' + self.agent_name + '/target_net_' + str(episode) + '.pt'))
+        self.policy_net.load_state_dict(torch.load('./agent_' + self.agent_name + '/policy_net_' + str(episode) + '.pt'))
         self.target_net.load_state_dict(torch.load('./agent_' + self.agent_name + '/target_net_' + str(episode) + '.pt'))

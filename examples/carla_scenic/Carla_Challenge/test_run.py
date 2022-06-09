@@ -42,9 +42,9 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
     simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
 
     threshold_list = np.array([3, 2])
-    TH_start = 0.5
-    TH_end = 0.05
-    TH_decay = 100
+    TH_start = 0.8
+    TH_end = 0.15
+    TH_decay = 200
     reward_list = []
 
     for episode in range(current_episodes, episodes):
