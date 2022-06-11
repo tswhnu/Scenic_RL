@@ -100,6 +100,9 @@ class CarlaSimulation(DrivingSimulation):
         self.driving_route = []
         self.speed_list = []
         self.tra_point_index = 0
+        self.ego_throttle = 0
+        self.ego_brake = 0
+        self.ego_steer = 0
         ##################
 
         weather = scene.params.get("weather")

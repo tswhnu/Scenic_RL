@@ -11,7 +11,7 @@ param carla_map = 'Town05'
 model scenic.simulators.carla.model
 
 ## CONSTANTS
-EGO_MODEL = "vehicle.tesla.model3"
+EGO_MODEL = "vehicle.lincoln.mkz_2017"
 EGO_SPEED = 10
 SAFETY_DISTANCE = 20
 BRAKE_INTENSITY = 1.0
@@ -20,12 +20,17 @@ BRAKE_INTENSITY = 1.0
 behavior AdversaryBehavior(trajectory):
     do FollowTrajectoryBehavior(trajectory=trajectory)
 
-
+behavior EgoBehavior(speed, trajectory):
+    try:
+        do FollowTrajectoryBehavior(target_speed=speed, trajectory=trajectory)
+        do FollowLaneBehavior(target_speed=speed)
+    interrupt when withinDistanceToAnyObjs(self, SAFETY_DISTANCE):
+        take SetBrakeAction(BRAKE_INTENSITY)
 
 ## DEFINING SPATIAL RELATIONS
 # Please refer to scenic/domains/driving/roads.py how to access detailed road infrastructure
 # 'network' is the 'class Network' object in roads.py
-# find out the unsignaled four way intersections
+
 fourWayIntersection = filter(lambda i: i.is4Way and not i.isSignalized, network.intersections)
 
 # make sure to put '*' to uniformly randomly select from all elements of the list
@@ -41,23 +46,16 @@ adv_start_lane = adv_maneuver.startLane
 
 ## OBJECT PLACEMENT
 ego_spawn_pt = OrientedPoint in ego_maneuver.startLane.centerline
-
+adv_spawn_pt = OrientedPoint in adv_maneuver.startLane.centerline
 
 ego = Car at ego_spawn_pt,
     with blueprint EGO_MODEL,
-    with trajectory ego_trajectory
+    with trajectory ego_trajectory,
+    with behavior EgoBehavior(EGO_SPEED, ego_trajectory)
 
-#for i in range(5):
-    #current_lane = Uniform(*[adv_maneuver.startLane, adv_maneuver.connectingLane, adv_maneuver.endLane])
-    #adv_spawn_pt = OrientedPoint in current_lane.centerline
-    #adversary = Car at adv_spawn_pt,
-        #with behavior AdversaryBehavior(adv_trajectory)
+adversary = Car at adv_spawn_pt,
+    with behavior AdversaryBehavior(adv_trajectory)
 
 require 20 <= (distance to intersec) <= 25
-#require 15 <= (distance from adversary to intersec) <= 20
-monitor Endstate:
-    time = 0
-    while time < 100 :
-        time += 1
-        wait
-    terminate
+require 15 <= (distance from adversary to intersec) <= 20
+terminate when (distance to ego_spawn_pt) > 70
