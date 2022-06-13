@@ -156,10 +156,10 @@ class DDQN(object):
         loss.backward()
         self.optimizer.step()
 
-    def save_model(self, episode):
-        torch.save(self.policy_net.state_dict(), './agent_' + self.agent_name + '/policy_net_' + str(episode) + '.pt')
-        torch.save(self.target_net.state_dict(), './agent_' + self.agent_name + '/target_net_' + str(episode) + '.pt')
+    def save_model(self, episode, model_saving_path):
+        torch.save(self.policy_net.state_dict(), model_saving_path + '/agent_' + self.agent_name + '/policy_net_' + str(episode) + '.pt')
+        torch.save(self.target_net.state_dict(), model_saving_path + '/agent_' + self.agent_name + '/target_net_' + str(episode) + '.pt')
 
     def load_model(self, episode):
-        self.policy_net.load_state_dict(torch.load('./agent_' + self.agent_name + '/policy_net_' + str(episode) + '.pt'))
+        self.policy_net.load_state_dict(torch.load('./log_2022-06-11/agent_' + self.agent_name + '/policy_net_' + str(episode) + '.pt'))
         self.target_net.load_state_dict(torch.load('./agent_' + self.agent_name + '/target_net_' + str(episode) + '.pt'))

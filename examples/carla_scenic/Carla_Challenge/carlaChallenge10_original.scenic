@@ -29,17 +29,11 @@ ego_start_lane = Uniform(*intersec.incomingLanes)
 ego_maneuver = Uniform(*ego_start_lane.maneuvers)
 ego_trajectory = [ego_maneuver.startLane, ego_maneuver.connectingLane, ego_maneuver.endLane]
 
-adv_maneuver = Uniform(*ego_maneuver.conflictingManeuvers)
-adv_trajectory = [adv_maneuver.startLane, adv_maneuver.connectingLane, adv_maneuver.endLane]
-adv_start_lane = adv_maneuver.startLane
 
 ## OBJECT PLACEMENT
 ego_spawn_pt = OrientedPoint in ego_maneuver.startLane.centerline
-adv_spawn_pt = OrientedPoint in adv_maneuver.startLane.centerline
 
 ego = Car at ego_spawn_pt,
     with blueprint EGO_MODEL,
     with trajectory ego_trajectory,
     with rolename "ego_car"
-
-terminate when (distance to ego_spawn_pt) > 70

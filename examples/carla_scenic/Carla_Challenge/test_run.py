@@ -16,6 +16,8 @@ from RL_agent.DDQN import *
 from RL_agent.ACTION_SELECTION import *
 import time
 from scenic.simulators.carla.utils.generate_traffic import *
+import os
+from datetime import datetime
 
 
 #####
@@ -37,7 +39,8 @@ def creat_agents(n_action, n_state_list, agent_name_list, load_model=True, curre
     return agent_list
 
 
-def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=150, n_state_list=None, npc_vehicle_num = 50, npc_ped_num = 50, traffic_generation = False, save_model=False):
+def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=150, n_state_list=None,
+          npc_vehicle_num = 50, npc_ped_num = 50, traffic_generation = False, save_model=False):
     scenario = scenic.scenarioFromFile('carlaChallenge10.scenic',
                                        model='scenic.simulators.carla.model')
     simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
@@ -51,6 +54,20 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
     TH_end = 0.15
     TH_decay = 200
     reward_list = []
+    current_time = str(datetime.today())
+    current_time = current_time.split(' ')
+    current_time = current_time[0]
+    log_path = "./log_" + current_time
+    model_saving_path = "./trained_model_" + current_time
+
+    if not os.path.exists(log_path):
+        os.makedirs(log_path)
+
+
+    if not os.path.exists(model_saving_path):
+        os.makedirs(model_saving_path)
+        os.makedirs(model_saving_path + "/agent_path")
+        os.makedirs(model_saving_path + "/agent_speed")
 
     try:
         for episode in range(current_episodes, episodes):
@@ -163,14 +180,14 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
                     # RL_speed.store_transition(state_list[1], action_seq[1], reward_list[1], new_state[-2:], done)
                     # update the state velue
                     state_list = new_state_list
-                    if RL_agents_list[0].memory_counter > MEMORY_CAPACITY and save_model:
+                    if RL_agents_list[0].memory_counter > MEMORY_CAPACITY:
                         for RL_agent in RL_agents_list:
                             RL_agent.optimize_model()
                     if done:
                         print("reward_info: ", epi_reward / simulation.currentTime)
                         reward_list.append(epi_reward / simulation.currentTime)
                         reward_array = np.array(reward_list)
-                        np.save("./log/reward_list" + str(episode) + ".npy", reward_array)
+                        np.save(log_path + "/reward_list" + str(episode) + ".npy", reward_array)
                         break
 
                     simulation.updateObjects()
@@ -187,9 +204,10 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
             finally:
                 # route = np.array(route)
                 # trajectory = np.array(trajectory)
-                np.save("./log/vehicle_trajectory" + str(episode) + ".npy", simulation.driving_trajectory)
-                np.save("./log/reference_route" + str(episode) + ".npy", simulation.driving_route)
-                np.save("./log/vehicle_speed" + str(episode) + ".npy", simulation.speed_list)
+                np.save(log_path + "/vehicle_trajectory" + str(episode) + ".npy", simulation.driving_trajectory)
+                np.save(log_path + "/reference_route" + str(episode) + ".npy", simulation.driving_route)
+                np.save(log_path + "/vehicle_speed" + str(episode) + ".npy", simulation.speed_list)
+                np.save(log_path + "/vehicle_control_list" + str(episode) + ".npy", simulation.control_signal_list)
                 # driving_trajectory = simulation.driving_trajectory
                 # plt.plot(trajectory[:, 0], trajectory[:, 1])
                 # plt.scatter(simulation.ego_spawn_point[0], simulation.ego_spawn_point[1])
@@ -202,10 +220,11 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
                 if episode % 20 == 0:
                     print("current_epi:", episode, "last_epi_duration:", epi_dur)
                     print(epi_reward / (simulation.currentTime + 1))
-                if episode % 100 == 0:
-                    print("saving model")
-                    for RL_agent in RL_agents_list:
-                        RL_agent.save_model(episode)
+                if episode % 100 == 0 and save_model:
+                    if os.path.exists('./log_' + str(current_time)):
+                        print("saving model")
+                        for RL_agent in RL_agents_list:
+                            RL_agent.save_model(episode, model_saving_path)
                 ##############################################################################
                 simulation.destroy()
                 for obj in simulation.scene.objects:
@@ -227,12 +246,13 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
             time.sleep(0.5)
         else:
             pass
-n_action = 9
-n_state_list = [7, 2]
+n_action = 8
+n_state_list = [10, 4]
 agent_name_list = ['path', 'speed']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=False)
-train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=0, maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=False)
+train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=0, maxSteps=1000,
+      n_state_list=n_state_list, traffic_generation=False, save_model=True)
 
 # simulation.run(maxSteps=None)
 #         result = simulation.trajectory

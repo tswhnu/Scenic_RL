@@ -100,9 +100,10 @@ class CarlaSimulation(DrivingSimulation):
         self.driving_route = []
         self.speed_list = []
         self.tra_point_index = 0
-        self.ego_throttle = 0
-        self.ego_brake = 0
-        self.ego_steer = 0
+        self.ego_throttle = 0.0
+        self.ego_brake = 0.0
+        self.ego_steer = 0.0
+        self.control_signal_list = []
         ##################
 
         weather = scene.params.get("weather")
@@ -278,6 +279,7 @@ class CarlaSimulation(DrivingSimulation):
         self.speed_list.append(current_speed)
         angular_velocity = self.ego.carlaActor.get_angular_velocity().z
 
+
         # calculate difference
         route_distance1 = self.route_distance(route[0], route[1], ego_location)
         route_distance2 = self.route_distance(route[1], route[2], ego_location)
@@ -286,7 +288,14 @@ class CarlaSimulation(DrivingSimulation):
         # distance to next part of road section
         next_distance = self.distance(ego_location, route[1])
 
-        state = np.array([route_distance1, route_distance2, next_distance, angle_diff1, angle_diff2, angular_velocity,
+        # current_driving_sate
+        current_throttle = self.ego_throttle
+        current_brake = self.ego_brake
+        current_steer = self.ego_steer
+
+        state = np.array([route_distance1, route_distance2, next_distance,
+                          angle_diff1, angle_diff2, angular_velocity,
+                          current_steer, current_brake, current_throttle,
                           current_speed, self.speed_limit]).astype(np.single)
 
         return state
@@ -381,25 +390,34 @@ class CarlaSimulation(DrivingSimulation):
                     obj._control = None
 
     def step(self, action, last_position):
+
+        # also gather the control signal histroy for the vehicle
+        self.control_signal_list.append([self.ego_throttle, self.ego_brake, self.ego_steer])
+
         # defination of different actions
         if action == 0:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=1.0))
+            self.ego_throttle += 0.5
+            self.ego_brake = 0.0
+            self.ego_throttle = min(self.ego_throttle, 1)
         elif action == 1:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0.5))
+            self.ego_throttle += 0.2
+            self.ego_brake = 0.0
+            self.ego_throttle = min(self.ego_throttle, 1)
         elif action == 2:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0, brake=0))
+            pass
         elif action == 3:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(brake=0.5))
+            self.ego_brake = 1.0
+            self.ego_throttle = 0.0
         elif action == 4:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(brake=1.0))
+            self.ego_steer = max(-1.0, self.ego_steer - 0.5)
         elif action == 5:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=-1.0, throttle=0.2))
+            self.ego_steer = max(-1.0, self.ego_steer - 0.2)
         elif action == 6:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=-0.5, throttle=0.2))
+            self.ego_steer = min(1.0, self.ego_steer + 0.2)
         elif action == 7:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=0.5, throttle=0.2))
-        elif action == 8:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=1.0, throttle=0.2))
+            self.ego_steer = min(1.0, self.ego_steer + 0.5)
+
+        self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=self.ego_throttle, brake=self.ego_brake, steer=self.ego_steer))
         # the env information
         route = self.trace_route()
         route = np.array(route)
