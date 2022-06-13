@@ -393,13 +393,13 @@ class CarlaSimulation(DrivingSimulation):
         elif action == 4:
             self.ego.carlaActor.apply_control(carla.VehicleControl(brake=1.0))
         elif action == 5:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=-1.0, throttle=0.2))
+            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=-0.8, throttle=0.2))
         elif action == 6:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=-0.5, throttle=0.2))
+            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=-0.4, throttle=0.2))
         elif action == 7:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=0.5, throttle=0.2))
+            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=0.4, throttle=0.2))
         elif action == 8:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=1.0, throttle=0.2))
+            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=0.8, throttle=0.2))
         # the env information
         route = self.trace_route()
         route = np.array(route)

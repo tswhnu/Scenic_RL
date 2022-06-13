@@ -99,7 +99,6 @@ class DDQN(object):
 
 
     def select_action(self, state):
-
         state = torch.unsqueeze(torch.tensor(state), dim=0)
         p = np.random.random()
 
@@ -108,7 +107,6 @@ class DDQN(object):
         else:
             E_thresh = EPS_END + (EPS_START - EPS_END) * \
                        math.exp(-1. * self.learn_step / EPS_DECAY)
-        print(E_thresh)
         if self.test_mode:
             actions_value = self.policy_net.forward(state)
             return torch.max(actions_value, 1)[1].data.cpu().numpy()[0]
