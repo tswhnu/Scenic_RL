@@ -24,6 +24,7 @@ from bird_view.birdview_semantic import *
 from matplotlib import pyplot as plt
 import numpy as np
 from scenic.simulators.carla.utils.Reward_functions import *
+from agents.navigation.controller import *
 #########
 from scenic.domains.driving.simulators import DrivingSimulator, DrivingSimulation
 from scenic.core.simulators import SimulationCreationError
@@ -382,24 +383,36 @@ class CarlaSimulation(DrivingSimulation):
 
     def step(self, action, last_position):
         # defination of different actions
+        # if action == 0:
+        #     self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=1.0))
+        # elif action == 1:
+        #     self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0.5))
+        # elif action == 2:
+        #     self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0, brake=0))
+        # elif action == 3:
+        #     self.ego.carlaActor.apply_control(carla.VehicleControl(brake=0.5))
+        # elif action == 4:
+        #     self.ego.carlaActor.apply_control(carla.VehicleControl(brake=1.0))
         if action == 0:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=1.0))
+            steer = -0.8
         elif action == 1:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0.5))
+            steer = -0.4
         elif action == 2:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0, brake=0))
+            steer = 0.0
         elif action == 3:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(brake=0.5))
+            steer = 0.4
         elif action == 4:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(brake=1.0))
-        elif action == 5:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=-0.8, throttle=0.2))
-        elif action == 6:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=-0.4, throttle=0.2))
-        elif action == 7:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=0.4, throttle=0.2))
-        elif action == 8:
-            self.ego.carlaActor.apply_control(carla.VehicleControl(steer=0.8, throttle=0.2))
+            steer = 0.8
+        ################################################################################################################
+        speed_controller = PIDLongitudinalController(vehicle=self.ego.carlaActor)
+        acceleration = speed_controller.run_step(self.speed_limit)
+        if acceleration >= 0.0:
+            throttle = min(acceleration, 0.8)
+            brake = 0.0
+        else:
+            throttle = 0.0
+            brake = min(abs(acceleration), 0.3)
+        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=steer, throttle=throttle, brake=brake))
         # the env information
         route = self.trace_route()
         route = np.array(route)

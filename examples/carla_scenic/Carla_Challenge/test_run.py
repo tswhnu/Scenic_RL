@@ -4,7 +4,6 @@ from scenic.simulators.carla.simulator import CarlaSimulator
 import scenic.syntax.veneer as veneer
 import types
 from collections import OrderedDict
-from memory_profiler import profile
 from scenic.core.object_types import (enableDynamicProxyFor, setDynamicProxyFor,
                                       disableDynamicProxyFor)
 from scenic.core.distributions import RejectionException
@@ -37,7 +36,10 @@ def creat_agents(n_action, n_state_list, agent_name_list, load_model=True, curre
     return agent_list
 
 
-def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=150, n_state_list=None, npc_vehicle_num = 50, npc_ped_num = 50, traffic_generation = False, save_model=False):
+def train(episodes=None, maxSteps=None, RL_agents_list=None,
+          current_episodes=150, n_state_list=None,
+          npc_vehicle_num = 50, npc_ped_num = 50,
+          traffic_generation = False, save_model=False):
     scenario = scenic.scenarioFromFile('carlaChallenge10.scenic',
                                        model='scenic.simulators.carla.model')
     simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
@@ -80,7 +82,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
                 initial_state= simulation.get_state()
                 initial_ego_position = np.array([simulation.ego.carlaActor.get_location().x,
                                                  simulation.ego.carlaActor.get_location().y])
-                state_list = [initial_state[0:n_state_list[0]], initial_state[-n_state_list[1]:]]
+                state_list = [initial_state[0:n_state_list[0]]]
                 last_position = initial_ego_position
                 ###################################################################################
                 # Run simulation
@@ -136,27 +138,32 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
                     simulation.executeActions(allActions)
 
                     ####################################################################
-                    Q_list = []
-                    # this part is used to obtain the q vlaue of different RL agent
-                    TH_q = TH_end + (TH_start - TH_end) * math.exp(-1. * episode / TH_decay)
-                    threshold_list = TH_q * threshold_list
-                    for i in range(len(RL_agents_list)):
-                        q = RL_agents_list[i].action_value(state_list[i])
-                        Q_list.append(q)
+                    if len(RL_agents_list) == 0:
+                        Q_list = []
+                        # this part is used to obtain the q vlaue of different RL agent
+                        TH_q = TH_end + (TH_start - TH_end) * math.exp(-1. * episode / TH_decay)
+                        threshold_list = TH_q * threshold_list
+                        for i in range(len(RL_agents_list)):
+                            q = RL_agents_list[i].action_value(state_list[i])
+                            Q_list.append(q)
 
-                    action_seq = action_selection(q_list=Q_list, threshold_list=threshold_list,
-                                                  action_set=np.array(list(range(n_action))), current_eps=episode)
-                    # if simulation.currentTime % (maxSteps / 2) == 0:
-                    #     print("action_seq: ", action_seq)
-                    # the final action will be decided by last action in the list
-                    action = action_seq[-1]
+                        action_seq = action_selection(q_list=Q_list, threshold_list=threshold_list,
+                                                      action_set=np.array(list(range(n_action))), current_eps=episode)
+                        # if simulation.currentTime % (maxSteps / 2) == 0:
+                        #     print("action_seq: ", action_seq)
+                        # the final action will be decided by last action in the list
+                        action = action_seq[-1]
+                    else:
+                        action = RL_agents_list[0].select_action(state_list[0])
+                        action_seq = [action]
                     # Run the simulation for a single step and read its state back into Scenic
                     new_state, reward, done, _ = simulation.step(
                         action=action,
                         last_position=last_position)  # here need to notice that the reward value here will be a list
-                    new_state_list = [new_state[0:n_state_list[0]], new_state[-n_state_list[1]:]]
+                    new_state_list = [new_state[0:n_state_list[0]]]
                     # here we got tge cumulative reward of the current episode
                     epi_reward += reward
+
                     for i in range(len(RL_agents_list)):
                         RL_agents_list[i].store_transition(state_list[i], action_seq[i], reward[i], new_state_list[i], done)
                     # RL_path.store_transition(state_list[0], action_seq[0], reward_list[0], new_state, done)
@@ -227,12 +234,14 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, current_episodes=15
             time.sleep(0.5)
         else:
             pass
-n_action = 9
-n_state_list = [7, 2]
-agent_name_list = ['path', 'speed']
+n_action = 5
+# n_state_list = [7, 2]
+# agent_name_list = ['path', 'speed']
+n_state_list = [7]
+agent_name_list = ['path']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
-                              load_model=False)
-train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=0, maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=False)
+                              load_model=True, current_step=4800)
+train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=4800, maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=False)
 
 # simulation.run(maxSteps=None)
 #         result = simulation.trajectory

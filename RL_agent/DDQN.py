@@ -24,7 +24,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 EPS_START = 0.9
 EPS_END = 0.05
-EPS_DECAY = 100
+EPS_DECAY = 500
 
 
 class Linear_Net(nn.Module):
@@ -85,6 +85,7 @@ class DDQN(object):
         self.test_mode = test
         self.var_eps = var_eps
         self.agent_name = agent_name
+        self.eval_model_load_path = "test"
 
     def action_value(self, state):
         state = torch.unsqueeze(torch.tensor(state), dim=0)
