@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-episodes = random.randint(3000, 3300)
+episodes = random.randint(0, 300)
 
 reference_route = np.load('./log/reference_route' + str(episodes) + '.npy')
 driving_trajectory = np.load('./log/vehicle_trajectory'+str(episodes) +'.npy')

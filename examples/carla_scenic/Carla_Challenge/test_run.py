@@ -238,11 +238,11 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
 n_action = 5
 # n_state_list = [7, 2]
 # agent_name_list = ['path', 'speed']
-n_state_list = [7]
+n_state_list = [8]
 agent_name_list = ['path']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
-                              load_model=True, current_step=900)
-train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=900,
+                              load_model=False)
+train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=0,
       maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=True)
 
 # simulation.run(maxSteps=None)

@@ -290,7 +290,7 @@ class CarlaSimulation(DrivingSimulation):
         next_distance = self.distance(ego_location, route[1])
 
         state = np.array([route_distance1, route_distance2, next_distance, angle_diff1, angle_diff2, angular_velocity,
-                          current_speed, self.speed_limit]).astype(np.single)
+                          self.ego_steer, current_speed, self.speed_limit]).astype(np.single)
 
         return state
 
@@ -388,15 +388,15 @@ class CarlaSimulation(DrivingSimulation):
         # elif action == 4:
         #     self.ego.carlaActor.apply_control(carla.VehicleControl(brake=1.0))
         if action == 0:
-            steer = -0.8
+            self.ego_steer -= 0.3
         elif action == 1:
-            steer = -0.4
+            self.ego_steer -= 0.1
         elif action == 2:
-            steer = 0.0
+            pass
         elif action == 3:
-            steer = 0.4
+            self.ego_steer += 0.1
         elif action == 4:
-            steer = 0.8
+           self.ego_steer += 0.3
         ################################################################################################################
         speed_controller = PIDLongitudinalController(vehicle=self.ego.carlaActor)
         acceleration = speed_controller.run_step(self.speed_limit)
@@ -406,7 +406,7 @@ class CarlaSimulation(DrivingSimulation):
         else:
             throttle = 0.0
             brake = min(abs(acceleration), 0.3)
-        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=steer, throttle=throttle, brake=brake))
+        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=self.ego_steer, throttle=throttle, brake=brake))
         # the env information
         route = self.trace_route()
         route = np.array(route)
