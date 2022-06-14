@@ -32,6 +32,7 @@ def creat_agents(n_action, n_state_list, agent_name_list, load_model=True, curre
             agent = DDQN(n_state=n_state_list[i], n_action=n_action, agent_name=agent_name_list[i])
             if load_model:
                 agent.load_model(current_step)
+                print("model_" + str(i) + "lodaing")
             agent_list.append(agent)
     return agent_list
 
@@ -209,7 +210,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 if episode % 20 == 0:
                     print("current_epi:", episode, "last_epi_duration:", epi_dur)
                     print(epi_reward / (simulation.currentTime + 1))
-                if episode % 100 == 0:
+                if episode % 100 == 0 and save_model:
                     print("saving model")
                     for RL_agent in RL_agents_list:
                         RL_agent.save_model(episode)
@@ -240,8 +241,9 @@ n_action = 5
 n_state_list = [7]
 agent_name_list = ['path']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
-                              load_model=True, current_step=4800)
-train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=4800, maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=False)
+                              load_model=True, current_step=900)
+train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=900,
+      maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=True)
 
 # simulation.run(maxSteps=None)
 #         result = simulation.trajectory

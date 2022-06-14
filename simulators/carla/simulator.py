@@ -84,7 +84,7 @@ class CarlaSimulator(DrivingSimulator):
 
 
 class CarlaSimulation(DrivingSimulation):
-    def __init__(self, scene, client, tm, timestep, render, record, scenario_number, verbosity=0, speed_limit=30):
+    def __init__(self, scene, client, tm, timestep, render, record, scenario_number, verbosity=0, speed_limit=25):
         super().__init__(scene, timestep=timestep, verbosity=verbosity)
         self.client = client
         self.world = self.client.get_world()
@@ -251,11 +251,12 @@ class CarlaSimulation(DrivingSimulation):
 
     def angle_diff(self, route_angle):
         vehicle_yaw = self.ego.carlaActor.get_transform().rotation.yaw
+
         angle_diff = route_angle - vehicle_yaw
         if angle_diff <= -180:
             angle_diff += 360
         elif angle_diff >= 180:
-            angle_diff = 360 - angle_diff
+            angle_diff -= 360
         return angle_diff
 
     def get_state(self):
@@ -267,6 +268,7 @@ class CarlaSimulation(DrivingSimulation):
 
         # route information
         route = np.array(self.trace_route())
+
         route_angle1 = self.angle(route[0], route[1])
         route_angle2 = self.angle(route[1], route[2])
 
@@ -300,17 +302,9 @@ class CarlaSimulation(DrivingSimulation):
     def route_distance(self, point1, point2, ego_car_location):
         A = point2[1] - point1[1]
         B = point1[0] - point2[0]
-        C = (point1[1] - point2[1]) * point1[0] + (point2[0] - point1[0]) * point1[1]
-        if A == 0 and B == 0:
-            distance = self.distance(point1, ego_car_location)
-        else:
-            distance = np.abs(A * ego_car_location[0] + B * ego_car_location[1] + C) / (np.sqrt(A ** 2 + B ** 2) + 0.1)
+        C = (point2[0] * point1[1]) - (point1[0] * point2[1])
 
-        # here judge the point is on left side or right side of the lane
-        if C >= 0:
-            distance = -distance
-        else:
-            distance = distance
+        distance = (A * ego_car_location[0] + B * ego_car_location[1] + C) / (np.sqrt(A ** 2 + B ** 2) + 0.1)
 
         return distance
 
