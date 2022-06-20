@@ -136,7 +136,7 @@ class CarlaSimulation(DrivingSimulation):
         if self.record:
             if not os.path.exists(self.record):
                 os.mkdir(self.record)
-            name = "{}/scenario{}.log".format(self.record, self.scenario_number)
+            name = "{}/scenario{}.log_01".format(self.record, self.scenario_number)
             self.client.start_recorder(name)
 
         # Create Carla actors corresponding to Scenic objects
@@ -341,10 +341,14 @@ class CarlaSimulation(DrivingSimulation):
                 vector1 = [route_list[i][0] - ego_location[0], route_list[i][1] - ego_location[1]]
                 # the vector between the following waypoint and cirrent waypoint
                 vector2 = [route_list[i+1][0] - route_list[i][0], route_list[i+1][1] - route_list[i][1]]
+
+                value = (vector1[0] * vector2[0] + vector1[1] * vector2[1]) / \
+                        (math.sqrt(vector1[0] ** 2 + vector1[1] ** 2) *
+                         math.sqrt(vector2[0] ** 2 + vector2[1] ** 2 ))
+                sign = abs(value) / value
+
                 # the angle bwteen the vector1 and vector2
-                angle = math.acos((vector1[0] * vector2[0] + vector1[1] * vector2[1]) /
-                                  (math.sqrt(vector1[0] ** 2 + vector1[1] ** 2) *
-                                   math.sqrt(vector2[0] ** 2 + vector2[1] ** 2 )))
+                angle = math.acos(min(1.0, abs(value)) * sign)
 
                 if angle < (math.pi/2):
                     # means this point is the next point that the vehicle need to go to
@@ -441,8 +445,6 @@ class CarlaSimulation(DrivingSimulation):
             brake = min(abs(acceleration), 0.3)
         self.ego.carlaActor.apply_control(carla.VehicleControl(steer=self.ego_steer, throttle=throttle, brake=brake))
         # the env information
-        route = self.trace_route()
-        route = np.array(route)
         ego_location = [self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y]
         ego_speed = [self.ego.carlaActor.get_velocity().x, self.ego.carlaActor.get_velocity().y]
         final_destination = self.driving_trajectory[-1]
@@ -466,7 +468,7 @@ class CarlaSimulation(DrivingSimulation):
         else:
             done = False
         rv = speed_reward(ego_speed, self.speed_limit, 5)
-        rp = pathfollowing_reward(current_state=self.get_state())
+        rp = pathfollowing_reward(current_state=self.get_state(), current_route=self.trace_route(), ego_car_location=ego_location)
         reward = np.array([rp, rv])
         ############################################################
         # Run simulation for one timestep

@@ -22,16 +22,36 @@ def speed_reward(ego_car_speed, speed_limit, tolerance=5):
         reward = -current_speed / (speed_limit + tolerance)
     return reward
 
-def pathfollowing_reward(current_state = None):
+def pathfollowing_reward(current_state = None, current_route = None, ego_car_location = None):
+
+    # the heading direction error
     route_distance = current_state[0]
     distance1 = current_state[1]
     distance2 = current_state[2]
     angel_diff1 = current_state[3]
     angle_diff2 = current_state[4]
     ego_diff = (distance1 / distance2) * angel_diff1 + ((distance2 - distance1) / distance2) * angle_diff2
-
     heading_reward = math.cos(ego_diff)
-    return heading_reward
+
+    # route cross error
+
+    # this reward will show the distance between the refer path and ego-vehicle
+    distance_bound = 1  # m here is the tolerance of the distance error
+    # calculate the distance between vehicle position and the current trace
+    point1 = current_route[0]
+    point2 = current_route[1]
+    A = point2[1] - point1[1]
+    B = point1[0] - point2[0]
+    C = (point1[1] - point2[1]) * point1[0] + (point2[0] - point1[0]) * point1[1]
+    distance = np.abs(A * ego_car_location[0] + B * ego_car_location[1] + C) / (np.sqrt(A ** 2 + B ** 2) + 0.1)
+    distance_reward = (distance_bound - distance) / distance_bound
+
+    reward = heading_reward + distance_reward
+
+
+    return reward
+
+
 
 
 

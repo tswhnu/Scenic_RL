@@ -7,8 +7,8 @@ episodes = random.randint(0, 100)
 def func(x, a, b, c):
     return a + b * x + c * x ** 2
 
-reference_route = np.load('./log/reference_route' + str(episodes) + '.npy')
-driving_trajectory = np.load('./log/vehicle_trajectory'+str(episodes) +'.npy')
+reference_route = np.load('./log_01/reference_route' + str(episodes) + '.npy')
+driving_trajectory = np.load('./log_01/vehicle_trajectory'+str(episodes) +'.npy')
 # para2 = np.polyfit(current_route[:, 0], current_route[:, 1], 3 )
 # p = np.poly1d(para2)
 # x = np.linspace(start=current_route[0, 0], stop=current_route[-1, 0], num=100)
@@ -29,8 +29,8 @@ plt.show()
 #     plt.show()
 
 
-# vehicle_speed = np.load('./log/vehicle_speed' + str(episodes) + '.npy')
-# reward_curve = np.load('./log/reward_list561.npy')
+# vehicle_speed = np.load('./log_01/vehicle_speed' + str(episodes) + '.npy')
+# reward_curve = np.load('./log_01/reward_list561.npy')
 #
 
 # plt.plot(np.array([i for i in range(len(vehicle_speed))]), vehicle_speed)

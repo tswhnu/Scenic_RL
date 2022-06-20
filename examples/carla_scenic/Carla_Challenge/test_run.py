@@ -178,7 +178,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                         print("reward_info: ", epi_reward / simulation.currentTime)
                         reward_list.append(epi_reward / simulation.currentTime)
                         reward_array = np.array(reward_list)
-                        np.save("./log/reward_list" + str(episode) + ".npy", reward_array)
+                        np.save("./log_01/reward_list" + str(episode) + ".npy", reward_array)
                         break
 
                     simulation.updateObjects()
@@ -195,9 +195,9 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             finally:
                 # route = np.array(route)
                 # trajectory = np.array(trajectory)
-                np.save("./log/vehicle_trajectory" + str(episode) + ".npy", simulation.driving_trajectory)
-                np.save("./log/reference_route" + str(episode) + ".npy", simulation.driving_route)
-                np.save("./log/vehicle_speed" + str(episode) + ".npy", simulation.speed_list)
+                np.save("./log_01/vehicle_trajectory" + str(episode) + ".npy", simulation.driving_trajectory)
+                np.save("./log_01/reference_route" + str(episode) + ".npy", simulation.driving_route)
+                np.save("./log_01/vehicle_speed" + str(episode) + ".npy", simulation.speed_list)
                 # driving_trajectory = simulation.driving_trajectory
                 # plt.plot(trajectory[:, 0], trajectory[:, 1])
                 # plt.scatter(simulation.ego_spawn_point[0], simulation.ego_spawn_point[1])
