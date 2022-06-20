@@ -243,7 +243,7 @@ agent_name_list = ['path']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=False)
 train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=0,
-      maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=True)
+      maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=False)
 
 # simulation.run(maxSteps=None)
 #         result = simulation.trajectory

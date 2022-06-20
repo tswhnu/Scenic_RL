@@ -160,6 +160,10 @@ class CarlaSimulation(DrivingSimulation):
                 ###################################################################################
                 # the starting and end point of the trajectory
                 self.ego_spawn_point = [obj.position[0], -obj.position[1]]
+                # find the cloest point in the trajectory list
+                self.tra_point_index = self.find_closest_point(self.driving_trajectory, self.ego_spawn_point)
+                if self.tra_point_index == 0:
+                    self.tra_point_index += 1
                 ###########################################################
                 # add routeplanner for vehicles in carla
                 self.route_planner = GlobalRoutePlanner(self.map, sampling_resolution=2.0)
@@ -217,7 +221,7 @@ class CarlaSimulation(DrivingSimulation):
     #         return trace
     def trace_route(self, point_num=3):
         # here giving the future three points based on the current trajectory and the vehicle position
-        route = self.driving_trajectory[self.tra_point_index:self.tra_point_index + point_num]
+        route = self.driving_trajectory[(self.tra_point_index - 1):self.tra_point_index + point_num - 1]
         route = list(route)
         if len(route) < point_num:
             for i in range(point_num - len(route)):
@@ -268,12 +272,15 @@ class CarlaSimulation(DrivingSimulation):
 
         # route information
         route = np.array(self.trace_route())
+        ego_location = np.array([self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y])
 
-        route_angle1 = self.angle(route[0], route[1])
-        route_angle2 = self.angle(route[1], route[2])
+        # the angle of vector between current vehicle location and following tracking waypoint
+        angle1 = self.angle(ego_location, route[2])
+        # the angle of vector between current vehicle location and current tracking waypoint
+        angle2 = self.angle(ego_location, route[1])
 
         # vehicle states
-        ego_location = np.array([self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y])
+
         self.driving_route.append(list(ego_location))
         ego_car_speed = np.array([self.ego.carlaActor.get_velocity().x, self.ego.carlaActor.get_velocity().y])
         vehicle_vel = math.sqrt(ego_car_speed[0] ** 2 + ego_car_speed[1] ** 2)
@@ -282,14 +289,16 @@ class CarlaSimulation(DrivingSimulation):
         angular_velocity = self.ego.carlaActor.get_angular_velocity().z
 
         # calculate difference
-        route_distance1 = self.route_distance(route[0], route[1], ego_location)
-        route_distance2 = self.route_distance(route[1], route[2], ego_location)
-        angle_diff1 = self.angle_diff(route_angle1)
-        angle_diff2 = self.angle_diff(route_angle2)
-        # distance to next part of road section
-        next_distance = self.distance(ego_location, route[1])
+        # the distance between the vehicle and current route
+        route_distance = self.route_distance(route[0], route[1], ego_location)
+        # the distance between the vechile and precious waypoint
+        distance1 = self.distance(ego_location, route[0])
+        # dustance between the previous waypoint and current waypoint
+        distance2 = self.distance(route[0], route[1])
+        angle_diff1 = self.angle_diff(angle1)
+        angle_diff2 = self.angle_diff(angle2)
 
-        state = np.array([route_distance1, route_distance2, next_distance, angle_diff1, angle_diff2, angular_velocity,
+        state = np.array([route_distance, distance1, distance2, angle_diff1, angle_diff2,
                           self.ego_steer, current_speed, self.speed_limit]).astype(np.single)
 
         return state
@@ -308,17 +317,41 @@ class CarlaSimulation(DrivingSimulation):
 
         return distance
 
-    def find_closest_point(self, route_list):
-        ego_location = [self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y]
+    def find_closest_point(self, route_list, vehicle_position = None):
+        if vehicle_position is None:
+            ego_location = [self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y]
+        else:
+            ego_location = vehicle_position
         min_distance = float('inf')
         closest_index = -1
         for i, route_point in enumerate(route_list):
             distance = self.distance(ego_location, route_point)
             if distance < min_distance:
-                if distance >= 0.5:
-                    min_distance = distance
-                    closest_index = i
+                min_distance = distance
+                closest_index = i
         return closest_index
+
+    def trace_waypoint(self, route_list):
+        ego_location = [self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y]
+        if self.tra_point_index == 0:
+            self.tra_point_index += 1
+        else:
+            for i in range(self.tra_point_index, len(route_list) - 1):
+                # the vector between the current waypoint and ego vehicle
+                vector1 = [route_list[i][0] - ego_location[0], route_list[i][1] - ego_location[1]]
+                # the vector between the following waypoint and cirrent waypoint
+                vector2 = [route_list[i+1][0] - route_list[i][0], route_list[i+1][1] - route_list[i][1]]
+                # the angle bwteen the vector1 and vector2
+                angle = math.acos((vector1[0] * vector2[0] + vector1[1] * vector2[1]) /
+                                  (math.sqrt(vector1[0] ** 2 + vector1[1] ** 2) *
+                                   math.sqrt(vector2[0] ** 2 + vector2[1] ** 2 )))
+
+                if angle < (math.pi/2):
+                    # means this point is the next point that the vehicle need to go to
+                    break
+                else:
+                    # this point already passed
+                    self.tra_point_index += 1
 
     def collision_data(self, event):
         self.collision_history.append(event)
@@ -433,14 +466,13 @@ class CarlaSimulation(DrivingSimulation):
         else:
             done = False
         rv = speed_reward(ego_speed, self.speed_limit, 5)
-        rp = pathfollowing_reward(ego_car_speed=ego_speed, ego_car_location=ego_location,
-                                  last_ego_car_location=last_position, trace=route,
-                                  destination=self.driving_trajectory[-1])
+        rp = pathfollowing_reward(current_state=self.get_state())
         reward = np.array([rp, rv])
         ############################################################
         # Run simulation for one timestep
         self.world.tick()
-        self.tra_point_index = self.find_closest_point(self.driving_trajectory)
+        self.trace_waypoint(self.driving_trajectory)
+
         new_state = self.get_state()
         # Render simulation
         spectator_transform = self.ego.carlaActor.get_transform()
