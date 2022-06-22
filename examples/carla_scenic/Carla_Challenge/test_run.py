@@ -83,7 +83,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 initial_state= simulation.get_state()
                 initial_ego_position = np.array([simulation.ego.carlaActor.get_location().x,
                                                  simulation.ego.carlaActor.get_location().y])
-                state_list = [initial_state[0:n_state_list[0]]]
+                state_list = [initial_state[-2:]]
                 last_position = initial_ego_position
                 ###################################################################################
                 # Run simulation
@@ -161,7 +161,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     new_state, reward, done, _ = simulation.step(
                         action=action,
                         last_position=last_position)  # here need to notice that the reward value here will be a list
-                    new_state_list = [new_state[0:n_state_list[0]]]
+                    new_state_list = [new_state[-2:]]
                     # here we got tge cumulative reward of the current episode
                     epi_reward += reward
 
@@ -238,12 +238,12 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
 n_action = 5
 # n_state_list = [7, 2]
 # agent_name_list = ['path', 'speed']
-n_state_list = [8]
-agent_name_list = ['path']
+n_state_list = [2]
+agent_name_list = ['speed']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=False)
 train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=0,
-      maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=True)
+      maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=False)
 
 # simulation.run(maxSteps=None)
 #         result = simulation.trajectory

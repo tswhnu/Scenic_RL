@@ -104,6 +104,8 @@ class CarlaSimulation(DrivingSimulation):
         self.ego_throttle = 0
         self.ego_brake = 0
         self.ego_steer = 0
+        self.waypoint_path = None
+        self.past_steering = 0.0
         ##################
 
         weather = scene.params.get("weather")
@@ -163,6 +165,8 @@ class CarlaSimulation(DrivingSimulation):
                 start_point = carla.Location(x=start_point[0], y=-start_point[1], z=0.5)
                 end_point = carla.Location(x=end_point[0], y=-end_point[1], z=0.5)
                 path = route_planner.trace_route(origin=start_point, destination=end_point)
+                # the original path based on waypoints
+                self.waypoint_path = path
                 temp_path = []
                 for i in range(len(path)):
                     location = [path[i][0].transform.location.x, path[i][0].transform.location.y]
@@ -443,41 +447,60 @@ class CarlaSimulation(DrivingSimulation):
 
     def step(self, action, last_position):
         # defination of different actions
-        # if action == 0:
-        #     self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=1.0))
-        # elif action == 1:
-        #     self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0.5))
-        # elif action == 2:
-        #     self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0, brake=0))
-        # elif action == 3:
-        #     self.ego.carlaActor.apply_control(carla.VehicleControl(brake=0.5))
-        # elif action == 4:
-        #     self.ego.carlaActor.apply_control(carla.VehicleControl(brake=1.0))
         if action == 0:
-            self.ego_steer -= 0.1
-        elif action == 1:
-            self.ego_steer -= 0.05
-        elif action == 2:
-            pass
-        elif action == 3:
-            self.ego_steer += 0.05
-        elif action == 4:
-           self.ego_steer += 0.1
-
-        if self.ego_steer < 0:
-            self.ego_steer = max(-0.8, self.ego_steer)
-        else:
-            self.ego_steer = min(0.8, self.ego_steer)
-        ################################################################################################################
-        speed_controller = PIDLongitudinalController(vehicle=self.ego.carlaActor)
-        acceleration = speed_controller.run_step(self.speed_limit)
-        if acceleration >= 0.0:
-            throttle = min(acceleration, 0.8)
+            throttle = 1.0
             brake = 0.0
-        else:
+        elif action == 1:
+            throttle = 0.5
+            brake = 0.0
+        elif action == 2:
             throttle = 0.0
-            brake = min(abs(acceleration), 0.3)
-        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=self.ego_steer, throttle=throttle, brake=brake))
+            brake = 0.0
+        elif action == 3:
+            throttle = 0.0
+            brake = 0.5
+        elif action == 4:
+            throttle = 0.0
+            brake = 1.0
+
+        # if action == 0:
+        #     self.ego_steer -= 0.1
+        # elif action == 1:
+        #     self.ego_steer -= 0.05
+        # elif action == 2:
+        #     pass
+        # elif action == 3:
+        #     self.ego_steer += 0.05
+        # elif action == 4:
+        #    self.ego_steer += 0.1
+        #
+        # if self.ego_steer < 0:
+        #     self.ego_steer = max(-0.8, self.ego_steer)
+        # else:
+        #     self.ego_steer = min(0.8, self.ego_steer)
+        ################################################################################################################
+        # speed_controller = PIDLongitudinalController(vehicle=self.ego.carlaActor)
+        # acceleration = speed_controller.run_step(20)
+        steer_controller = PIDLateralController(vehicle=self.ego.carlaActor, K_P=1.0, K_I=0.0, K_D=0.0, dt=0.03)
+        current_steering = steer_controller.run_step(waypoint=self.waypoint_path[self.tra_point_index][0])
+        # if acceleration >= 0.0:
+        #     throttle = min(acceleration, 0.8)
+        #     brake = 0.0
+        # else:
+        #     throttle = 0.0
+        #     brake = min(abs(acceleration), 0.3)
+
+        # if current_steering > self.past_steering + 0.1:
+        #     current_steering = self.past_steering + 0.1
+        # elif current_steering < self.past_steering - 0.1:
+        #     current_steering = self.past_steering - 0.1
+
+        if current_steering >= 0:
+            steering = min(0.8, current_steering)
+        else:
+            steering = max(-0.8, current_steering)
+        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=steering, throttle=throttle, brake=brake))
+        # self.ego.carlaActor.apply_control(control)
         # the env information
         ego_location = [self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y]
         ego_speed = [self.ego.carlaActor.get_velocity().x, self.ego.carlaActor.get_velocity().y]
@@ -501,9 +524,9 @@ class CarlaSimulation(DrivingSimulation):
             done = True
         else:
             done = False
-        rv = speed_reward(ego_speed, self.speed_limit, 5)
+        rv = speed_reward(ego_speed)
         rp = pathfollowing_reward(current_state=self.get_state(), current_route=self.trace_route(), ego_car_location=ego_location)
-        reward = np.array([rp, rv])
+        reward = np.array([rv, rp])
         ############################################################
         # Run simulation for one timestep
         self.world.tick()
