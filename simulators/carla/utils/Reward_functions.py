@@ -30,7 +30,7 @@ def pathfollowing_reward(current_state = None, current_route = None, ego_car_loc
     distance2 = current_state[2]
     angel_diff1 = current_state[3]
     angle_diff2 = current_state[4]
-    ego_diff = (distance1 / distance2) * angel_diff1 + ((distance2 - distance1) / distance2) * angle_diff2
+    ego_diff = (distance1 / (distance2 + 0.1)) * angel_diff1 + ((distance2 - distance1) / (distance2 + 0.1)) * angle_diff2
     heading_reward = math.cos(ego_diff)
 
     # route cross error

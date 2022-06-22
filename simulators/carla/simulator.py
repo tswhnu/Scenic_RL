@@ -142,24 +142,48 @@ class CarlaSimulation(DrivingSimulation):
         # Create Carla actors corresponding to Scenic objects
         self.ego = None
         for obj in self.objects:
-            carlaActor = self.createObjectInSimulator(obj)
+            if obj is self.objects[0]:
+                point1 = obj.trajectory[0].centerline.points[0]
+                point2 = obj.trajectory[0].centerline.points[1]
+                point1 = [point1[0], -point1[1]]
+                point2 = [point2[0], -point2[1]]
+                yaw = self.angle(point1=point1, point2=point2)
+                spawn_point = point1
+                carlaActor = self.createObjectInSimulator(obj, yaw, spawn_point)
+            else:
+                carlaActor = self.createObjectInSimulator(obj)
 
             # Check if ego (from carla_scenic_taks.py)
             if obj is self.objects[0]:
                 self.ego = obj
-                ###########################################################################
-                for i in range(len(self.ego.trajectory)):
-                    if i == 2:
-                        self.driving_trajectory += list(self.ego.trajectory[i].centerline.points)
-                    else:
-                        self.driving_trajectory += list(self.ego.trajectory[i].centerline.points[0:-1])
-                self.driving_trajectory = np.array(self.driving_trajectory)
-                # there need to have a transfer between the scenic position and carla position
-                self.driving_trajectory[:, 0] = self.driving_trajectory[:, 0]
-                self.driving_trajectory[:, 1] = -self.driving_trajectory[:, 1]
+                ##################################################################################
+                route_planner = GlobalRoutePlanner(wmap=self.map, sampling_resolution=1.0)
+                start_point = self.ego.trajectory[0].centerline.points[0]
+                end_point = self.ego.trajectory[-1].centerline.points[-1]
+                start_point = carla.Location(x=start_point[0], y=-start_point[1], z=0.5)
+                end_point = carla.Location(x=end_point[0], y=-end_point[1], z=0.5)
+                path = route_planner.trace_route(origin=start_point, destination=end_point)
+                temp_path = []
+                for i in range(len(path)):
+                    location = [path[i][0].transform.location.x, path[i][0].transform.location.y]
+                    temp_path.append(location)
+                self.driving_trajectory = np.array(temp_path)
+                # for i in range(len(self.ego.trajectory)):
+                #     if i == 2:
+                #         self.driving_trajectory += list(self.ego.trajectory[i].centerline.points)
+                #     else:
+                #         self.driving_trajectory += list(self.ego.trajectory[i].centerline.points[0:-1])
+                # self.driving_trajectory = np.array(self.driving_trajectory)
+                # # there need to have a transfer between the scenic position and carla position
+                # self.driving_trajectory[:, 0] = self.driving_trajectory[:, 0]
+                # self.driving_trajectory[:, 1] = -self.driving_trajectory[:, 1]
+                # plt.scatter(temp_path[:,0], temp_path[:,1])
+                # # plt.plot(self.driving_trajectory[:,0], self.driving_trajectory[:,1])
+                # plt.show()
                 ###################################################################################
                 # the starting and end point of the trajectory
-                self.ego_spawn_point = [obj.position[0], -obj.position[1]]
+                self.ego_spawn_point = [self.driving_trajectory[0,0], self.driving_trajectory[0,1]]
+                self.spawn_yaw = self.angle(self.driving_trajectory[0], self.driving_trajectory[1])
                 # find the cloest point in the trajectory list
                 self.tra_point_index = self.find_closest_point(self.driving_trajectory, self.ego_spawn_point)
                 if self.tra_point_index == 0:
@@ -361,7 +385,7 @@ class CarlaSimulation(DrivingSimulation):
         self.collision_history.append(event)
 
     ####################################################################################################################
-    def createObjectInSimulator(self, obj):
+    def createObjectInSimulator(self, obj, yaw=None, spawn_point=None):
         # Extract blueprint
         blueprint = self.blueprintLib.find(obj.blueprint)
         if obj.rolename is not None:
@@ -372,9 +396,14 @@ class CarlaSimulation(DrivingSimulation):
             blueprint.set_attribute('is_invincible', 'False')
 
         # Set up transform
-
-        loc = utils.scenicToCarlaLocation(obj.position, world=self.world, blueprint=obj.blueprint)
-        rot = utils.scenicToCarlaRotation(obj.heading)
+        if spawn_point is not None:
+            loc = carla.Location(x=spawn_point[0], y=spawn_point[1], z=0.5)
+        else:
+            loc = utils.scenicToCarlaLocation(obj.position, world=self.world, blueprint=obj.blueprint)
+        if yaw is not None:
+            rot = carla.Rotation(yaw=yaw)
+        else:
+            rot = utils.scenicToCarlaRotation(obj.heading)
         transform = carla.Transform(loc, rot)
 
         # Create Carla actor
@@ -425,15 +454,20 @@ class CarlaSimulation(DrivingSimulation):
         # elif action == 4:
         #     self.ego.carlaActor.apply_control(carla.VehicleControl(brake=1.0))
         if action == 0:
-            self.ego_steer -= 0.3
-        elif action == 1:
             self.ego_steer -= 0.1
+        elif action == 1:
+            self.ego_steer -= 0.05
         elif action == 2:
             pass
         elif action == 3:
-            self.ego_steer += 0.1
+            self.ego_steer += 0.05
         elif action == 4:
-           self.ego_steer += 0.3
+           self.ego_steer += 0.1
+
+        if self.ego_steer < 0:
+            self.ego_steer = max(-0.8, self.ego_steer)
+        else:
+            self.ego_steer = min(0.8, self.ego_steer)
         ################################################################################################################
         speed_controller = PIDLongitudinalController(vehicle=self.ego.carlaActor)
         acceleration = speed_controller.run_step(self.speed_limit)

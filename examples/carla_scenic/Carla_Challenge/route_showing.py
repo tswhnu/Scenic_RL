@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 from scipy.optimize import curve_fit
-episodes = random.randint(0, 100)
+episodes = random.randint(2000, 2420)
 
 def func(x, a, b, c):
     return a + b * x + c * x ** 2
