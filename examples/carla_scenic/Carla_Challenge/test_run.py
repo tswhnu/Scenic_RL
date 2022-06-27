@@ -23,13 +23,13 @@ from scenic.simulators.carla.utils.generate_traffic import *
 # the parameters in the threshold list define the range of accpetable action value
 
 # define differnet RL agent for different objectives
-def creat_agents(n_action, n_state_list, agent_name_list, load_model=True, current_step=150):
+def creat_agents(n_action, n_state_list, agent_name_list, load_model=True, current_step=150, test_mode=False):
     agent_list = []
     if len(n_state_list) != len(agent_name_list):
         raise Exception('the len of n_state_list and agent_name_list must be same')
     else:
         for i in range(len(n_state_list)):
-            agent = DDQN(n_state=n_state_list[i], n_action=n_action, agent_name=agent_name_list[i])
+            agent = DDQN(n_state=n_state_list[i], n_action=n_action, agent_name=agent_name_list[i], test=test_mode)
             if load_model:
                 agent.load_model(current_step)
                 print("model_" + str(i) + "lodaing")
@@ -40,7 +40,7 @@ def creat_agents(n_action, n_state_list, agent_name_list, load_model=True, curre
 def train(episodes=None, maxSteps=None, RL_agents_list=None,
           current_episodes=150, n_state_list=None,
           npc_vehicle_num = 50, npc_ped_num = 50,
-          traffic_generation = False, save_model=False):
+          traffic_generation = False, save_model=False, test_mode=True):
     scenario = scenic.scenarioFromFile('carlaChallenge10.scenic',
                                        model='scenic.simulators.carla.model')
     simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
@@ -171,14 +171,14 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     # RL_speed.store_transition(state_list[1], action_seq[1], reward_list[1], new_state[-2:], done)
                     # update the state velue
                     state_list = new_state_list
-                    if RL_agents_list[0].memory_counter > MEMORY_CAPACITY and save_model:
+                    if RL_agents_list[0].memory_counter > MEMORY_CAPACITY and not test_mode:
                         for RL_agent in RL_agents_list:
                             RL_agent.optimize_model()
                     if done:
                         print("reward_info: ", epi_reward / simulation.currentTime)
                         reward_list.append(epi_reward / simulation.currentTime)
                         reward_array = np.array(reward_list)
-                        np.save("./log_01/reward_list" + str(episode) + ".npy", reward_array)
+
                         break
 
                     simulation.updateObjects()
@@ -195,9 +195,11 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             finally:
                 # route = np.array(route)
                 # trajectory = np.array(trajectory)
-                np.save("./log_01/vehicle_trajectory" + str(episode) + ".npy", simulation.driving_trajectory)
-                np.save("./log_01/reference_route" + str(episode) + ".npy", simulation.driving_route)
-                np.save("./log_01/vehicle_speed" + str(episode) + ".npy", simulation.speed_list)
+                if save_model:
+                    np.save("./log_01/reward_list" + str(episode) + ".npy", reward_array)
+                    np.save("./log_01/vehicle_trajectory" + str(episode) + ".npy", simulation.driving_trajectory)
+                    np.save("./log_01/reference_route" + str(episode) + ".npy", simulation.driving_route)
+                    np.save("./log_01/vehicle_speed" + str(episode) + ".npy", simulation.speed_list)
                 # driving_trajectory = simulation.driving_trajectory
                 # plt.plot(trajectory[:, 0], trajectory[:, 1])
                 # plt.scatter(simulation.ego_spawn_point[0], simulation.ego_spawn_point[1])
@@ -241,9 +243,9 @@ n_action = 5
 n_state_list = [8]
 agent_name_list = ['path']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
-                              load_model=False)
+                              load_model=True, current_step=2300, test_mode=True)
 train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=0,
-      maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=True)
+      maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=False, test_mode=True)
 
 # simulation.run(maxSteps=None)
 #         result = simulation.trajectory

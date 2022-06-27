@@ -112,6 +112,7 @@ class DDQN(object):
             actions_value = self.policy_net.forward(state)
             return torch.max(actions_value, 1)[1].data.cpu().numpy()[0]
         else:
+            print(E_thresh)
             if p > E_thresh:
                 actions_value = self.policy_net.forward(state)
                 return torch.max(actions_value, 1)[1].data.cpu().numpy()[0]
