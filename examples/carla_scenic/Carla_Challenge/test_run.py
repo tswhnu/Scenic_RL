@@ -83,7 +83,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 initial_state= simulation.get_state()
                 initial_ego_position = np.array([simulation.ego.carlaActor.get_location().x,
                                                  simulation.ego.carlaActor.get_location().y])
-                state_list = [initial_state[0:n_state_list[0]]]
+                state_list = [initial_state[0:n_state_list[0]], initial_state[-2:]]
                 last_position = initial_ego_position
                 ###################################################################################
                 # Run simulation
@@ -139,29 +139,19 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     simulation.executeActions(allActions)
 
                     ####################################################################
-                    if len(RL_agents_list) == 0:
-                        Q_list = []
-                        # this part is used to obtain the q vlaue of different RL agent
-                        TH_q = TH_end + (TH_start - TH_end) * math.exp(-1. * episode / TH_decay)
-                        threshold_list = TH_q * threshold_list
+                    if len(RL_agents_list) > 1:
+                        action_seq = []
                         for i in range(len(RL_agents_list)):
-                            q = RL_agents_list[i].action_value(state_list[i])
-                            Q_list.append(q)
-
-                        action_seq = action_selection(q_list=Q_list, threshold_list=threshold_list,
-                                                      action_set=np.array(list(range(n_action))), current_eps=episode)
-                        # if simulation.currentTime % (maxSteps / 2) == 0:
-                        #     print("action_seq: ", action_seq)
-                        # the final action will be decided by last action in the list
-                        action = action_seq[-1]
+                            action = RL_agents_list[i].select_action(state_list[i])
+                            action_seq.append(action)
                     else:
                         action = RL_agents_list[0].select_action(state_list[0])
                         action_seq = [action]
                     # Run the simulation for a single step and read its state back into Scenic
                     new_state, reward, done, _ = simulation.step(
-                        action=action,
+                        actions=action_seq,
                         last_position=last_position)  # here need to notice that the reward value here will be a list
-                    new_state_list = [new_state[0:n_state_list[0]]]
+                    new_state_list = [new_state[0:n_state_list[0]], new_state[-2:]]
                     # here we got tge cumulative reward of the current episode
                     epi_reward += reward
 
@@ -240,8 +230,8 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
 n_action = 5
 # n_state_list = [7, 2]
 # agent_name_list = ['path', 'speed']
-n_state_list = [8]
-agent_name_list = ['path']
+n_state_list = [8, 2]
+agent_name_list = ['path', 'speed']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=True, current_step=2300, test_mode=True)
 train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=0,

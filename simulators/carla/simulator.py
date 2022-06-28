@@ -441,7 +441,7 @@ class CarlaSimulation(DrivingSimulation):
                     obj.carlaActor.apply_control(ctrl)
                     obj._control = None
 
-    def step(self, action, last_position):
+    def step(self, actions, last_position):
         # defination of different actions
         # if action == 0:
         #     self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=1.0))
