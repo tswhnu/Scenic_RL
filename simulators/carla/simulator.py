@@ -443,40 +443,47 @@ class CarlaSimulation(DrivingSimulation):
 
     def step(self, actions, last_position):
         # defination of different actions
-        # if action == 0:
-        #     self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=1.0))
-        # elif action == 1:
-        #     self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0.5))
-        # elif action == 2:
-        #     self.ego.carlaActor.apply_control(carla.VehicleControl(throttle=0, brake=0))
-        # elif action == 3:
-        #     self.ego.carlaActor.apply_control(carla.VehicleControl(brake=0.5))
-        # elif action == 4:
-        #     self.ego.carlaActor.apply_control(carla.VehicleControl(brake=1.0))
-        if action == 0:
+        # steer action
+        if actions[0] == 0:
             self.ego_steer -= 0.1
-        elif action == 1:
+        elif actions[0] == 1:
             self.ego_steer -= 0.05
-        elif action == 2:
+        elif actions[0] == 2:
             pass
-        elif action == 3:
+        elif actions[0] == 3:
             self.ego_steer += 0.05
-        elif action == 4:
+        elif actions[0] == 4:
            self.ego_steer += 0.1
 
+        if actions[1] == 0:
+            throttle = 1.0
+            brake = 0.0
+        elif actions[1] == 1:
+            throttle = 0.5
+            brake = 0.0
+        elif actions[1] == 2:
+            throttle = 0.0
+            brake = 0.0
+        elif actions[1] == 3:
+            throttle = 0.0
+            brake = 0.5
+        elif actions[1] == 4:
+            throttle = 0.0
+            brake = 1.0
+        # limit the range of steer angle
         if self.ego_steer < 0:
             self.ego_steer = max(-0.8, self.ego_steer)
         else:
             self.ego_steer = min(0.8, self.ego_steer)
         ################################################################################################################
-        speed_controller = PIDLongitudinalController(vehicle=self.ego.carlaActor)
-        acceleration = speed_controller.run_step(self.speed_limit)
-        if acceleration >= 0.0:
-            throttle = min(acceleration, 0.8)
-            brake = 0.0
-        else:
-            throttle = 0.0
-            brake = min(abs(acceleration), 0.3)
+        # speed_controller = PIDLongitudinalController(vehicle=self.ego.carlaActor)
+        # acceleration = speed_controller.run_step(self.speed_limit)
+        # if acceleration >= 0.0:
+        #     throttle = min(acceleration, 0.8)
+        #     brake = 0.0
+        # else:
+        #     throttle = 0.0
+        #     brake = min(abs(acceleration), 0.3)
         self.ego.carlaActor.apply_control(carla.VehicleControl(steer=self.ego_steer, throttle=throttle, brake=brake))
         # the env information
         ego_location = [self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y]
