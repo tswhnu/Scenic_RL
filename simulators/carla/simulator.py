@@ -1,7 +1,7 @@
 """Simulator interface for CARLA."""
+import cv2
 import numpy
 import numpy as np
-
 try:
     import carla
 except ImportError as e:
@@ -21,10 +21,12 @@ import pygame
 from agents.navigation.behavior_agent import BehaviorAgent
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 from bird_view.birdview_semantic import *
+from bird_view.draw_map import *
 from matplotlib import pyplot as plt
 import numpy as np
 from scenic.simulators.carla.utils.Reward_functions import *
 from agents.navigation.controller import *
+from bird_view.draw_routes import *
 #########
 from scenic.domains.driving.simulators import DrivingSimulator, DrivingSimulation
 from scenic.core.simulators import SimulationCreationError
@@ -56,6 +58,7 @@ class CarlaSimulator(DrivingSimulator):
         self.tm.set_synchronous_mode(True)
 
         # Set to synchronous with fixed timestep
+        self.original_settings = self.world.get_settings()
         settings = self.world.get_settings()
         settings.no_rendering_mode = False
         settings.synchronous_mode = True
@@ -97,13 +100,14 @@ class CarlaSimulation(DrivingSimulation):
         self.collision_history = []
         self.speed_limit = speed_limit  # km/h
         self.ego_spawn_point = None
+        self.reference_route = []
         self.driving_trajectory = []
-        self.driving_route = []
         self.speed_list = []
         self.tra_point_index = 0
         self.ego_throttle = 0
         self.ego_brake = 0
         self.ego_steer = 0
+        self.waypoint_path = []
         ##################
 
         weather = scene.params.get("weather")
@@ -165,27 +169,29 @@ class CarlaSimulation(DrivingSimulation):
                 path = route_planner.trace_route(origin=start_point, destination=end_point)
                 temp_path = []
                 for i in range(len(path)):
+                    self.waypoint_path.append(path[i][0])
                     location = [path[i][0].transform.location.x, path[i][0].transform.location.y]
                     temp_path.append(location)
-                self.driving_trajectory = np.array(temp_path)
+                self.reference_route = np.array(temp_path)
+
                 # for i in range(len(self.ego.trajectory)):
                 #     if i == 2:
-                #         self.driving_trajectory += list(self.ego.trajectory[i].centerline.points)
+                #         self.reference_route += list(self.ego.trajectory[i].centerline.points)
                 #     else:
-                #         self.driving_trajectory += list(self.ego.trajectory[i].centerline.points[0:-1])
-                # self.driving_trajectory = np.array(self.driving_trajectory)
+                #         self.reference_route += list(self.ego.trajectory[i].centerline.points[0:-1])
+                # self.reference_route = np.array(self.reference_route)
                 # # there need to have a transfer between the scenic position and carla position
-                # self.driving_trajectory[:, 0] = self.driving_trajectory[:, 0]
-                # self.driving_trajectory[:, 1] = -self.driving_trajectory[:, 1]
+                # self.reference_route[:, 0] = self.reference_route[:, 0]
+                # self.reference_route[:, 1] = -self.reference_route[:, 1]
                 # plt.scatter(temp_path[:,0], temp_path[:,1])
-                # # plt.plot(self.driving_trajectory[:,0], self.driving_trajectory[:,1])
+                # # plt.plot(self.reference_route[:,0], self.reference_route[:,1])
                 # plt.show()
                 ###################################################################################
                 # the starting and end point of the trajectory
-                self.ego_spawn_point = [self.driving_trajectory[0,0], self.driving_trajectory[0,1]]
-                self.spawn_yaw = self.angle(self.driving_trajectory[0], self.driving_trajectory[1])
+                self.ego_spawn_point = [self.reference_route[0, 0], self.reference_route[0, 1]]
+                self.spawn_yaw = self.angle(self.reference_route[0], self.reference_route[1])
                 # find the cloest point in the trajectory list
-                self.tra_point_index = self.find_closest_point(self.driving_trajectory, self.ego_spawn_point)
+                self.tra_point_index = self.find_closest_point(self.reference_route, self.ego_spawn_point)
                 if self.tra_point_index == 0:
                     self.tra_point_index += 1
                 ###########################################################
@@ -245,7 +251,7 @@ class CarlaSimulation(DrivingSimulation):
     #         return trace
     def trace_route(self, point_num=3):
         # here giving the future three points based on the current trajectory and the vehicle position
-        route = self.driving_trajectory[(self.tra_point_index - 1):self.tra_point_index + point_num - 1]
+        route = self.reference_route[(self.tra_point_index - 1):self.tra_point_index + point_num - 1]
         route = list(route)
         if len(route) < point_num:
             for i in range(point_num - len(route)):
@@ -268,10 +274,7 @@ class CarlaSimulation(DrivingSimulation):
         else:
             return result
 
-    def draw_trace(self, ego_vehicle_location, trace):
-        ego_vehicle_location = np.array(ego_vehicle_location)
-        trace = np.array(trace)
-        new_trace = trace - ego_vehicle_location
+
 
     def destination_reward_test(self, destination, ego_location):
         return math.sqrt(
@@ -305,7 +308,7 @@ class CarlaSimulation(DrivingSimulation):
 
         # vehicle states
 
-        self.driving_route.append(list(ego_location))
+        self.driving_trajectory.append(list(ego_location))
         ego_car_speed = np.array([self.ego.carlaActor.get_velocity().x, self.ego.carlaActor.get_velocity().y])
         vehicle_vel = math.sqrt(ego_car_speed[0] ** 2 + ego_car_speed[1] ** 2)
         current_speed = 3.6 * vehicle_vel  # km/h
@@ -366,6 +369,7 @@ class CarlaSimulation(DrivingSimulation):
                 # the vector between the following waypoint and cirrent waypoint
                 vector2 = [route_list[i+1][0] - route_list[i][0], route_list[i+1][1] - route_list[i][1]]
 
+                print(vector1, vector2)
                 value = (vector1[0] * vector2[0] + vector1[1] * vector2[1]) / \
                         (math.sqrt(vector1[0] ** 2 + vector1[1] ** 2) *
                          math.sqrt(vector2[0] ** 2 + vector2[1] ** 2 ))
@@ -488,7 +492,7 @@ class CarlaSimulation(DrivingSimulation):
         # the env information
         ego_location = [self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y]
         ego_speed = [self.ego.carlaActor.get_velocity().x, self.ego.carlaActor.get_velocity().y]
-        final_destination = self.driving_trajectory[-1]
+        final_destination = self.reference_route[-1]
 
         # here check the end situation
         if len(self.collision_history) != 0:
@@ -514,13 +518,14 @@ class CarlaSimulation(DrivingSimulation):
         ############################################################
         # Run simulation for one timestep
         self.world.tick()
-        self.trace_waypoint(self.driving_trajectory)
+        self.trace_waypoint(self.reference_route)
 
         new_state = self.get_state()
         # Render simulation
         spectator_transform = self.ego.carlaActor.get_transform()
         spectator_transform.location += carla.Location(x=-2, y=0, z=2.0)
         self.spectator.set_transform(spectator_transform)
+
         if self.render:
             # self.hud.tick(self.world, self.ego, self.displayClock)
             self.cameraManager.render(self.display)

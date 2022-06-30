@@ -15,7 +15,7 @@ from RL_agent.DDQN import *
 from RL_agent.ACTION_SELECTION import *
 import time
 from scenic.simulators.carla.utils.generate_traffic import *
-
+import numpy as np
 
 #####
 
@@ -185,12 +185,13 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             finally:
                 # route = np.array(route)
                 # trajectory = np.array(trajectory)
+                simulation.draw_trace(simulation.driving_trajectory)
                 if save_model:
                     np.save("./log_01/reward_list" + str(episode) + ".npy", reward_array)
-                    np.save("./log_01/vehicle_trajectory" + str(episode) + ".npy", simulation.driving_trajectory)
-                    np.save("./log_01/reference_route" + str(episode) + ".npy", simulation.driving_route)
+                    np.save("./log_01/vehicle_trajectory" + str(episode) + ".npy", simulation.reference_route)
+                    np.save("./log_01/reference_route" + str(episode) + ".npy", simulation.driving_trajectory)
                     np.save("./log_01/vehicle_speed" + str(episode) + ".npy", simulation.speed_list)
-                # driving_trajectory = simulation.driving_trajectory
+                # reference_route = simulation.reference_route
                 # plt.plot(trajectory[:, 0], trajectory[:, 1])
                 # plt.scatter(simulation.ego_spawn_point[0], simulation.ego_spawn_point[1])
                 # plt.plot(route[:, 0], route[:, 1])

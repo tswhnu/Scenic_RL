@@ -2,7 +2,6 @@ import numpy as np
 from carla_birdeye_view import BirdViewProducer, BirdViewCropType, PixelDimensions
 import math
 import cv2
-from bird_view.draw_routes import draw_route
 
 
 def bird_seg(client, agent_vehicle, route_list=None, image_range=None, resolution=0.1):
