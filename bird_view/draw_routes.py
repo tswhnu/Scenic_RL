@@ -42,16 +42,15 @@ def draw_trace(reference_route, driving_trajectory, original_map, bound_width = 
     original_map = np.array(original_map) / 255.0
     map_with_route = draw_route(reference_route, original_map, color=(0, 255, 0))
     map_with_trajectory = draw_route(driving_trajectory, map_with_route, color= (255, 165, 0))
-    print(map_with_trajectory.shape)
     map_with_trajectory = map_with_trajectory[pts_min[1]:pts_max[1], pts_min[0]:pts_max[0], :]
     plt.imshow(map_with_trajectory)
     plt.show()
 
-num = random.randint(2000, 2100)
-map = np.load('Town05.npy')
-refer_route = np.load('../examples/carla_scenic/Carla_Challenge/log_01/reference_route'+ str(num) + '.npy')
-driving_route = np.load('../examples/carla_scenic/Carla_Challenge/log_01/vehicle_trajectory'+ str(num) + '.npy')
-draw_trace(refer_route, driving_route, map)
+# num = random.randint(2000, 2100)
+# map = np.load('Town05.npy')
+# refer_route = np.load('../examples/carla_scenic/Carla_Challenge/log_01/reference_route'+ str(num) + '.npy')
+# driving_route = np.load('../examples/carla_scenic/Carla_Challenge/log_01/vehicle_trajectory'+ str(num) + '.npy')
+# draw_trace(refer_route, driving_route, map)
 # def point_rotate(original_point, yaw):
 #     new_point = [original_point[0] * math.cos(yaw * math.pi / 180) - original_point[1] * math.sin(yaw * math.pi / 180),
 #                  original_point[0] * math.sin(yaw * math.pi / 180) + original_point[1] * math.cos(yaw * math.pi / 180)]

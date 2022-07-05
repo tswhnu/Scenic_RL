@@ -369,7 +369,6 @@ class CarlaSimulation(DrivingSimulation):
                 # the vector between the following waypoint and cirrent waypoint
                 vector2 = [route_list[i+1][0] - route_list[i][0], route_list[i+1][1] - route_list[i][1]]
 
-                print(vector1, vector2)
                 value = (vector1[0] * vector2[0] + vector1[1] * vector2[1]) / \
                         (math.sqrt(vector1[0] ** 2 + vector1[1] ** 2) *
                          math.sqrt(vector2[0] ** 2 + vector2[1] ** 2 ))

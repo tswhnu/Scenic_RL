@@ -185,7 +185,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             finally:
                 # route = np.array(route)
                 # trajectory = np.array(trajectory)
-                simulation.draw_trace(simulation.driving_trajectory)
+                # simulation.draw_trace(simulation.driving_trajectory)
                 if save_model:
                     np.save("./log_01/reward_list" + str(episode) + ".npy", reward_array)
                     np.save("./log_01/vehicle_trajectory" + str(episode) + ".npy", simulation.reference_route)
