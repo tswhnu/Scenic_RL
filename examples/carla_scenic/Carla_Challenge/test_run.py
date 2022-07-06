@@ -16,7 +16,8 @@ from RL_agent.ACTION_SELECTION import *
 import time
 from scenic.simulators.carla.utils.generate_traffic import *
 import numpy as np
-
+import pygame
+from scenic.simulators.carla.utils.HUD_render import *
 #####
 
 
@@ -50,11 +51,33 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
     TH_end = 0.15
     TH_decay = 200
     reward_list = []
+    simulation = None
 
     try:
+        # Init Pygame
+        pygame.init()
+        display = pygame.display.set_mode(
+            (1920, 1080),
+            pygame.HWSURFACE | pygame.DOUBLEBUF)
+
+        # Place a title to game window
+        pygame.display.set_caption('test')
+
+        # Show loading screen
+        font = pygame.font.Font(pygame.font.get_default_font(), 20)
+        text_surface = font.render('Rendering map...', True, COLOR_WHITE)
+        display.blit(text_surface, text_surface.get_rect(center=(1920 / 2, 1080 / 2)))
+        pygame.display.flip()
+        clock = pygame.time.Clock()
+
+        if traffic_generation:
+            vehicle_list, all_id, all_actors = generate_traffic(vehicle_num=50,
+                                                                ped_num=50,
+                                                                carla_client=simulator.client)
+
         for episode in range(current_episodes, episodes):
             scene, _ = scenario.generate()
-            simulation = simulator.createSimulation(scene, traffic_generation=traffic_generation)
+            simulation = simulator.createSimulation(scene)
 
             last_position = None
             actionSequence = []
@@ -86,30 +109,12 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 assert simulation.currentTime == 0
                 # terminationReason = None
                 while maxSteps is None or simulation.currentTime < maxSteps:
+                    display.fill(COLOR_ALUMINIUM_4)
+                    simulation.rendering(display)
+
+                    pygame.display.flip()
                     if simulation.verbosity >= 3:
                         print(f'    Time step {simulation.currentTime}:')
-
-                    # Run compose blocks of compositional scenarios
-                    # terminationReason = dynamicScenario._step()
-
-                    # Check if any requirements fail
-                    # dynamicScenario._checkAlwaysRequirements()
-
-                    # # Run monitors
-                    # newReason = dynamicScenario._runMonitors()
-                    # if newReason is not None:
-                    #     terminationReason = newReason
-
-                    # "Always" and scenario-level requirements have been checked;
-                    # now safe to terminate if the top-level scenario has finished
-                    # or a monitor requested termination
-                    # if terminationReason is not None:
-                    #     done = True
-                    #     print(terminationReason)
-                    # terminationReason = dynamicScenario._checkSimulationTerminationConditions()
-                    # if terminationReason is not None:
-                    #     done = True
-                    #     print(terminationReason)
 
                     # Compute the actions of the agents in this time step
                     allActions = OrderedDict()
@@ -213,8 +218,15 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     monitor.stop()
                 veneer.endSimulation(simulation)
     finally:
-        if traffic_generation:
-            simulation.final_destroy()
+        if traffic_generation and simulation is not None:
+            print('\ndestroying %d vehicles' % len(vehicle_list))
+            simulator.client.apply_batch([carla.command.DestroyActor(x) for x in vehicle_list])
+            # stop walker controllers (list is [controller, actor, controller, actor ...])
+            for i in range(0, len(all_id), 2):
+                all_actors[i].stop()
+            print('\ndestroying' +  str(len(all_actors) // 2) + ' %d walkers')
+            simulator.client.apply_batch([carla.command.DestroyActor(x) for x in all_id])
+            time.sleep(0.5)
         else:
             pass
 n_action = 5

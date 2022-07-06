@@ -28,6 +28,7 @@ from scenic.simulators.carla.utils.Reward_functions import *
 from agents.navigation.controller import *
 from bird_view.draw_routes import *
 from scenic.simulators.carla.utils.generate_traffic import *
+from scenic.simulators.carla.utils.HUD_render import *
 #########
 from scenic.domains.driving.simulators import DrivingSimulator, DrivingSimulation
 from scenic.core.simulators import SimulationCreationError
@@ -71,11 +72,11 @@ class CarlaSimulator(DrivingSimulator):
         self.record = record  # whether to use the carla recorder
         self.scenario_number = 0  # Number of the scenario executed
 
-    def createSimulation(self, scene, verbosity=0, traffic_generation=False):
+    def createSimulation(self, scene, verbosity=0):
         self.scenario_number += 1
         return CarlaSimulation(scene, self.client, self.tm, self.timestep,
                                render=self.render, record=self.record,
-                               scenario_number=self.scenario_number, verbosity=verbosity, traffic_generation=traffic_generation)
+                               scenario_number=self.scenario_number, verbosity=verbosity)
 
     def destroy(self):
         settings = self.world.get_settings()
@@ -91,8 +92,7 @@ class CarlaSimulation(DrivingSimulation):
     def __init__(self, scene, client, tm,
                  timestep, render, record,
                  scenario_number, verbosity=0,
-                 speed_limit=25,
-                 traffic_generation=False):
+                 speed_limit=25):
         super().__init__(scene, timestep=timestep, verbosity=verbosity)
         self.client = client
         self.world = self.client.get_world()
@@ -116,6 +116,50 @@ class CarlaSimulation(DrivingSimulation):
         self.other_vehicles = []
         self.peds = []
         self.peds_ids = []
+        self.hero_actor = None
+        self.hero_transform = None
+        self.traffic_light_surfaces = TrafficLightSurfaces()
+        self.actors_with_transforms = None
+        ##################
+        # preparation of the HUD surface
+        self.map_image = MapImage(carla_world=self.world,
+                                  carla_map=self.map,
+                                  pixels_per_meter=PIXELS_PER_METER,
+                                  show_triggers=False,
+                                  show_connections=False,
+                                  show_spawn_points=False)
+        self._hud = HUD('test', 1920, 1080)
+        self.input_control = InputControl('test')
+
+        self.original_surface_size = min(self._hud.dim[0], self._hud.dim[1])
+        self.surface_size = self.map_image.big_map_surface.get_width()
+
+        self.scaled_size = int(self.surface_size)
+        self.prev_scaled_size = int(self.surface_size)
+
+        # Render Actors
+        self.actors_surface = pygame.Surface((self.map_image.surface.get_width(), self.map_image.surface.get_height()))
+        self.actors_surface.set_colorkey(COLOR_BLACK)
+
+        self.vehicle_id_surface = pygame.Surface((self.surface_size, self.surface_size)).convert()
+        self.vehicle_id_surface.set_colorkey(COLOR_BLACK)
+
+        self.border_round_surface = pygame.Surface(self._hud.dim, pygame.SRCALPHA).convert()
+        self.border_round_surface.set_colorkey(COLOR_WHITE)
+        self.border_round_surface.fill(COLOR_BLACK)
+
+        # Used for Hero Mode, draws the map contained in a circle with white border
+        center_offset = (int(self._hud.dim[0] / 2), int(self._hud.dim[1] / 2))
+        pygame.draw.circle(self.border_round_surface, COLOR_ALUMINIUM_1, center_offset, int(self._hud.dim[1] / 2))
+        pygame.draw.circle(self.border_round_surface, COLOR_WHITE, center_offset, int((self._hud.dim[1] - 8) / 2))
+
+        scaled_original_size = self.original_surface_size * (1.0 / 0.9)
+        self.hero_surface = pygame.Surface((scaled_original_size, scaled_original_size)).convert()
+
+        self.result_surface = pygame.Surface((self.surface_size, self.surface_size)).convert()
+        self.result_surface.set_colorkey(COLOR_BLACK)
+
+
         ##################
 
         weather = scene.params.get("weather")
@@ -168,8 +212,9 @@ class CarlaSimulation(DrivingSimulation):
             # Check if ego (from carla_scenic_taks.py)
             if obj is self.objects[0]:
                 self.ego = obj
+                self.hero_actor = self.ego.carlaActor
                 ##################################################################################
-                route_planner = GlobalRoutePlanner(wmap=self.map, sampling_resolution=1.0)
+                route_planner = GlobalRoutePlanner(wmap=self.map, sampling_resolution=2.0)
                 start_point = self.ego.trajectory[0].centerline.points[0]
                 end_point = self.ego.trajectory[-1].centerline.points[-1]
                 start_point = carla.Location(x=start_point[0], y=-start_point[1], z=0.5)
@@ -189,11 +234,6 @@ class CarlaSimulation(DrivingSimulation):
                 self.tra_point_index = self.find_closest_point(self.reference_route, self.ego_spawn_point)
                 if self.tra_point_index == 0:
                     self.tra_point_index += 1
-                # if need traffic generation in the scenario
-                if traffic_generation:
-                    self.other_vehicles, self.peds_ids, self.peds = generate_traffic(vehicle_num=50,
-                                                                        ped_num=50,
-                                                                        carla_client=self.client)
                 ###########################################################
                 # add routeplanner for vehicles in carla
                 self.route_planner = GlobalRoutePlanner(self.map, sampling_resolution=2.0)
@@ -214,13 +254,13 @@ class CarlaSimulation(DrivingSimulation):
                     self.cameraManager.set_sensor(camIndex)
                     self.cameraManager.set_transform(self.camTransform)
 
-        self.world.tick()  ## allowing manualgearshift to take effect 	# TODO still need this?
+        self.tick()  ## allowing manualgearshift to take effect 	# TODO still need this?
 
         for obj in self.objects:
             if isinstance(obj.carlaActor, carla.Vehicle):
                 obj.carlaActor.apply_control(carla.VehicleControl(manual_gear_shift=False))
 
-        self.world.tick()
+        self.tick()
 
         # Set Carla actor's initial speed (if specified)
         for obj in self.objects:
@@ -258,6 +298,12 @@ class CarlaSimulation(DrivingSimulation):
             return result
 
 
+    def tick(self):
+        actors = self.world.get_actors()
+        self.actors_with_transforms = [(actor, actor.get_transform()) for actor in actors]
+        if self.hero_actor is not None:
+            self.hero_transform = self.hero_actor.get_transform()
+        self.world.tick()
 
     def destination_reward_test(self, destination, ego_location):
         return math.sqrt(
@@ -369,6 +415,246 @@ class CarlaSimulation(DrivingSimulation):
 
     def collision_data(self, event):
         self.collision_history.append(event)
+
+    ####################################################################################################################
+    # HUD rendering part
+    def _split_actors(self):
+        """Splits the retrieved actors by type id"""
+        vehicles = []
+        traffic_lights = []
+        speed_limits = []
+        walkers = []
+
+        for actor_with_transform in self.actors_with_transforms:
+            actor = actor_with_transform[0]
+            if 'vehicle' in actor.type_id:
+                vehicles.append(actor_with_transform)
+            elif 'traffic_light' in actor.type_id:
+                traffic_lights.append(actor_with_transform)
+            elif 'speed_limit' in actor.type_id:
+                speed_limits.append(actor_with_transform)
+            elif 'walker.pedestrian' in actor.type_id:
+                walkers.append(actor_with_transform)
+
+        return (vehicles, traffic_lights, speed_limits, walkers)
+
+    def _render_traffic_lights(self, surface, list_tl, world_to_pixel):
+        """Renders the traffic lights and shows its triggers and bounding boxes if flags are enabled"""
+        self.affected_traffic_light = None
+
+        for tl in list_tl:
+            world_pos = tl.get_location()
+            pos = world_to_pixel(world_pos)
+
+
+            if self.hero_actor is not None:
+                corners = Util.get_bounding_box(tl)
+                corners = [world_to_pixel(p) for p in corners]
+                tl_t = tl.get_transform()
+
+                transformed_tv = tl_t.transform(tl.trigger_volume.location)
+                hero_location = self.hero_actor.get_location()
+                d = hero_location.distance(transformed_tv)
+                s = Util.length(tl.trigger_volume.extent) + Util.length(self.hero_actor.bounding_box.extent)
+                if (d <= s):
+                    # Highlight traffic light
+                    self.affected_traffic_light = tl
+                    srf = self.traffic_light_surfaces.surfaces['h']
+                    surface.blit(srf, srf.get_rect(center=pos))
+
+            srf = self.traffic_light_surfaces.surfaces[tl.state]
+            surface.blit(srf, srf.get_rect(center=pos))
+
+    def _render_speed_limits(self, surface, list_sl, world_to_pixel, world_to_pixel_width):
+        """Renders the speed limits by drawing two concentric circles (outer is red and inner white) and a speed limit text"""
+
+        font_size = world_to_pixel_width(2)
+        radius = world_to_pixel_width(2)
+        font = pygame.font.SysFont('Arial', font_size)
+
+        for sl in list_sl:
+
+            x, y = world_to_pixel(sl.get_location())
+
+            # Render speed limit concentric circles
+            white_circle_radius = int(radius * 0.75)
+
+            pygame.draw.circle(surface, COLOR_SCARLET_RED_1, (x, y), radius)
+            pygame.draw.circle(surface, COLOR_ALUMINIUM_0, (x, y), white_circle_radius)
+
+            limit = sl.type_id.split('.')[2]
+            font_surface = font.render(limit, True, COLOR_ALUMINIUM_5)
+
+            # Blit
+            if self.hero_actor is not None:
+                # In hero mode, Rotate font surface with respect to hero vehicle front
+                angle = -self.hero_transform.rotation.yaw - 90.0
+                font_surface = pygame.transform.rotate(font_surface, angle)
+                offset = font_surface.get_rect(center=(x, y))
+                surface.blit(font_surface, offset)
+
+            else:
+                # In map mode, there is no need to rotate the text of the speed limit
+                surface.blit(font_surface, (x - radius / 2, y - radius / 2))
+
+    def _render_walkers(self, surface, list_w, world_to_pixel):
+        """Renders the walkers' bounding boxes"""
+        for w in list_w:
+            color = COLOR_PLUM_0
+
+            # Compute bounding box points
+            bb = w[0].bounding_box.extent
+            corners = [
+                carla.Location(x=-bb.x, y=-bb.y),
+                carla.Location(x=bb.x, y=-bb.y),
+                carla.Location(x=bb.x, y=bb.y),
+                carla.Location(x=-bb.x, y=bb.y)]
+
+            w[1].transform(corners)
+            corners = [world_to_pixel(p) for p in corners]
+            pygame.draw.polygon(surface, color, corners)
+
+    def _render_vehicles(self, surface, list_v, world_to_pixel):
+        """Renders the vehicles' bounding boxes"""
+        for v in list_v:
+            color = COLOR_SKY_BLUE_0
+            if int(v[0].attributes['number_of_wheels']) == 2:
+                color = COLOR_CHOCOLATE_1
+            if v[0].attributes['role_name'] == 'hero':
+                color = COLOR_CHAMELEON_0
+            # Compute bounding box points
+            bb = v[0].bounding_box.extent
+            corners = [carla.Location(x=-bb.x, y=-bb.y),
+                       carla.Location(x=bb.x - 0.8, y=-bb.y),
+                       carla.Location(x=bb.x, y=0),
+                       carla.Location(x=bb.x - 0.8, y=bb.y),
+                       carla.Location(x=-bb.x, y=bb.y),
+                       carla.Location(x=-bb.x, y=-bb.y)
+                       ]
+            v[1].transform(corners)
+            corners = [world_to_pixel(p) for p in corners]
+            pygame.draw.lines(surface, color, False, corners, int(math.ceil(4.0 * self.map_image.scale)))
+
+    def render_actors(self, surface, vehicles, traffic_lights, speed_limits, walkers):
+        """Renders all the actors"""
+        # Static actors
+        self._render_traffic_lights(surface, [tl[0] for tl in traffic_lights], self.map_image.world_to_pixel)
+        self._render_speed_limits(surface, [sl[0] for sl in speed_limits], self.map_image.world_to_pixel,
+                                  self.map_image.world_to_pixel_width)
+
+        # Dynamic actors
+        self._render_vehicles(surface, vehicles, self.map_image.world_to_pixel)
+        self._render_walkers(surface, walkers, self.map_image.world_to_pixel)
+
+    def clip_surfaces(self, clipping_rect):
+        """Used to improve perfomance. Clips the surfaces in order to render only the part of the surfaces that are going to be visible"""
+        self.actors_surface.set_clip(clipping_rect)
+        self.vehicle_id_surface.set_clip(clipping_rect)
+        self.result_surface.set_clip(clipping_rect)
+
+    def _compute_scale(self, scale_factor):
+        """Based on the mouse wheel and mouse position, it will compute the scale and move the map so that it is zoomed in or out based on mouse position"""
+        m = self._input.mouse_pos
+
+        # Percentage of surface where mouse position is actually
+        px = (m[0] - self.scale_offset[0]) / float(self.prev_scaled_size)
+        py = (m[1] - self.scale_offset[1]) / float(self.prev_scaled_size)
+
+        # Offset will be the previously accumulated offset added with the
+        # difference of mouse positions in the old and new scales
+        diff_between_scales = ((float(self.prev_scaled_size) * px) - (float(self.scaled_size) * px),
+                               (float(self.prev_scaled_size) * py) - (float(self.scaled_size) * py))
+
+        self.scale_offset = (self.scale_offset[0] + diff_between_scales[0],
+                             self.scale_offset[1] + diff_between_scales[1])
+
+        # Update previous scale
+        self.prev_scaled_size = self.scaled_size
+
+        # Scale performed
+        self.map_image.scale_map(scale_factor)
+
+    def rendering(self, display):
+        """Renders the map and all the actors in hero and map mode"""
+        if self.actors_with_transforms is None:
+            return
+        self.result_surface.fill(COLOR_BLACK)
+
+        # Split the actors by vehicle type id
+        vehicles, traffic_lights, speed_limits, walkers = self._split_actors()
+
+        # Zoom in and out
+        scale_factor = 1.0
+
+        # Render Actors
+        self.actors_surface.fill(COLOR_BLACK)
+        self.render_actors(
+            self.actors_surface,
+            vehicles,
+            traffic_lights,
+            speed_limits,
+            walkers)
+
+        # Render Ids
+        self._hud.render_vehicles_ids(self.vehicle_id_surface, vehicles,
+                                      self.map_image.world_to_pixel, self.hero_actor, self.hero_transform)
+
+        # Blit surfaces
+        surfaces = ((self.map_image.surface, (0, 0)),
+                    (self.actors_surface, (0, 0)),
+                    (self.vehicle_id_surface, (0, 0)),
+                    )
+
+        angle = 0.0 if self.hero_actor is None else self.hero_transform.rotation.yaw + 90.0
+        self.traffic_light_surfaces.rotozoom(-angle, self.map_image.scale)
+
+        center_offset = (0, 0)
+        if self.hero_actor is not None:
+            # Hero Mode
+            hero_location_screen = self.map_image.world_to_pixel(self.hero_transform.location)
+            hero_front = self.hero_transform.get_forward_vector()
+            translation_offset = (hero_location_screen[0] - self.hero_surface.get_width() / 2 + hero_front.x * PIXELS_AHEAD_VEHICLE,
+                                  (hero_location_screen[1] - self.hero_surface.get_height() / 2 + hero_front.y * PIXELS_AHEAD_VEHICLE))
+
+            # Apply clipping rect
+            clipping_rect = pygame.Rect(translation_offset[0],
+                                        translation_offset[1],
+                                        self.hero_surface.get_width(),
+                                        self.hero_surface.get_height())
+            self.clip_surfaces(clipping_rect)
+
+            Util.blits(self.result_surface, surfaces)
+
+            self.border_round_surface.set_clip(clipping_rect)
+
+            self.hero_surface.fill(COLOR_ALUMINIUM_4)
+            self.hero_surface.blit(self.result_surface, (-translation_offset[0],
+                                                         -translation_offset[1]))
+
+            rotated_result_surface = pygame.transform.rotozoom(self.hero_surface, angle, 0.9).convert()
+
+            center = (display.get_width() / 2, display.get_height() / 2)
+            rotation_pivot = rotated_result_surface.get_rect(center=center)
+            display.blit(rotated_result_surface, rotation_pivot)
+
+            display.blit(self.border_round_surface, (0, 0))
+        else:
+            # Map Mode
+            # Translation offset
+            translation_offset = (self._input.mouse_offset[0] * scale_factor + self.scale_offset[0],
+                                  self._input.mouse_offset[1] * scale_factor + self.scale_offset[1])
+            center_offset = (abs(display.get_width() - self.surface_size) / 2 * scale_factor, 0)
+
+            # Apply clipping rect
+            clipping_rect = pygame.Rect(-translation_offset[0] - center_offset[0], -translation_offset[1],
+                                        self._hud.dim[0], self._hud.dim[1])
+            self.clip_surfaces(clipping_rect)
+            Util.blits(self.result_surface, surfaces)
+
+            display.blit(self.result_surface, (translation_offset[0] + center_offset[0],
+                                               translation_offset[1]))
+
+
 
     ####################################################################################################################
     def createObjectInSimulator(self, obj, yaw=None, spawn_point=None):
@@ -499,7 +785,7 @@ class CarlaSimulation(DrivingSimulation):
         reward = np.array([rp, rv])
         ############################################################
         # Run simulation for one timestep
-        self.world.tick()
+        self.tick()
         self.trace_waypoint(self.reference_route)
 
         new_state = self.get_state()
@@ -555,12 +841,3 @@ class CarlaSimulation(DrivingSimulation):
 
         self.world.tick()
         super().destroy()
-    def final_destroy(self):
-        print('\ndestroying %d vehicles' % len(self.other_vehicles))
-        self.client.apply_batch([carla.command.DestroyActor(x) for x in self.other_vehicles])
-        # stop walker controllers (list is [controller, actor, controller, actor ...])
-        for i in range(0, len(self.peds_ids), 2):
-            self.peds[i].stop()
-        print('\ndestroying %d walkers' % len(self.peds_ids) / 2)
-        self.client.apply_batch([carla.command.DestroyActor(x) for x in self.peds_ids])
-        time.sleep(0.5)
