@@ -534,7 +534,20 @@ class CarlaSimulation(DrivingSimulation):
             v[1].transform(corners)
             corners = [world_to_pixel(p) for p in corners]
             pygame.draw.lines(surface, color, False, corners, int(math.ceil(4.0 * self.map_image.scale)))
-
+    def _render_routes(self, surface, world_to_pixel):
+        future_route = self.reference_route[self.tra_point_index:(self.tra_point_index+5)]
+        route_carla = [carla.Location(x=point[0], y=point[1]) for point in future_route]
+        route_carla = [world_to_pixel(p) for p in route_carla]
+        whole_route = self.reference_route
+        whole_route = [carla.Location(x=p[0], y=p[1]) for p in whole_route]
+        whole_route = [world_to_pixel(p) for p in whole_route]
+        try:
+            pygame.draw.lines(surface, (0, 0, 255), False, whole_route, int(math.ceil(4.0 * self.map_image.scale)))
+            pygame.draw.lines(surface, (255, 0, 0), False, route_carla, int(math.ceil(4.0 * self.map_image.scale)))
+        except:
+            pass
+        finally:
+            pass
     def render_actors(self, surface, vehicles, traffic_lights, speed_limits, walkers):
         """Renders all the actors"""
         # Static actors
@@ -545,6 +558,7 @@ class CarlaSimulation(DrivingSimulation):
         # Dynamic actors
         self._render_vehicles(surface, vehicles, self.map_image.world_to_pixel)
         self._render_walkers(surface, walkers, self.map_image.world_to_pixel)
+        self._render_routes(surface, self.map_image.world_to_pixel)
 
     def clip_surfaces(self, clipping_rect):
         """Used to improve perfomance. Clips the surfaces in order to render only the part of the surfaces that are going to be visible"""
