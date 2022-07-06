@@ -169,32 +169,6 @@ class CarlaSimulation(DrivingSimulation):
             elif isinstance(weather, dict):
                 self.world.set_weather(carla.WeatherParameters(**weather))
 
-        # Reloads current world: destroys all actors, except traffic manager instances
-        # self.client.reload_world()
-
-        # Setup HUD
-        self.render = render
-        self.record = record
-        self.scenario_number = scenario_number
-        if self.render:
-            self.displayDim = (1280, 720)
-            self.displayClock = pygame.time.Clock()
-            self.camTransform = 0
-            pygame.init()
-            pygame.font.init()
-            self.hud = visuals.HUD(*self.displayDim)
-            self.display = pygame.display.set_mode(
-                self.displayDim,
-                pygame.HWSURFACE | pygame.DOUBLEBUF
-            )
-            self.cameraManager = None
-
-        if self.record:
-            if not os.path.exists(self.record):
-                os.mkdir(self.record)
-            name = "{}/scenario{}.log_01".format(self.record, self.scenario_number)
-            self.client.start_recorder(name)
-
         # Create Carla actors corresponding to Scenic objects
         self.ego = None
         for obj in self.objects:
@@ -205,7 +179,13 @@ class CarlaSimulation(DrivingSimulation):
                 point2 = [point2[0], -point2[1]]
                 yaw = self.angle(point1=point1, point2=point2)
                 spawn_point = point1
-                carlaActor = self.createObjectInSimulator(obj, yaw, spawn_point)
+                while True:
+                    try:
+                        carlaActor = self.createObjectInSimulator(obj, yaw, spawn_point)
+                    except:
+                        print("spawning ego vehicle")
+                    if carlaActor is not None:
+                        break
             else:
                 carlaActor = self.createObjectInSimulator(obj)
 
@@ -245,14 +225,6 @@ class CarlaSimulation(DrivingSimulation):
                 self.collision_sensor = self.world.spawn_actor(collision_sensor, transform, attach_to=carlaActor)
                 self.collision_sensor.listen(lambda event: self.collision_data(event))
 
-                # Set up camera manager and collision sensor for ego
-                if self.render:
-                    camIndex = 0
-                    camPosIndex = 0
-                    self.cameraManager = visuals.CameraManager(self.world, carlaActor, self.hud)
-                    self.cameraManager._transform_index = camPosIndex
-                    self.cameraManager.set_sensor(camIndex)
-                    self.cameraManager.set_transform(self.camTransform)
 
         self.tick()  ## allowing manualgearshift to take effect 	# TODO still need this?
 
@@ -808,11 +780,6 @@ class CarlaSimulation(DrivingSimulation):
         spectator_transform.location += carla.Location(x=-2, y=0, z=2.0)
         self.spectator.set_transform(spectator_transform)
 
-        if self.render:
-            # self.hud.tick(self.world, self.ego, self.displayClock)
-            self.cameraManager.render(self.display)
-            # self.hud.render(self.display)
-            pygame.display.flip()
         return new_state, reward, done, len(self.collision_history)
 
     def getProperties(self, obj, properties):
@@ -847,10 +814,6 @@ class CarlaSimulation(DrivingSimulation):
                     obj.carlaController.stop()
                     obj.carlaController.destroy()
                 obj.carlaActor.destroy()
-        if self.render and self.cameraManager:
-            self.cameraManager.destroy_sensor()
-        # self.collision_sensor.destroy()
-
         self.client.stop_recorder()
 
         self.world.tick()

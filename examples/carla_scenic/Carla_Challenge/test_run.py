@@ -69,7 +69,6 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
         display.blit(text_surface, text_surface.get_rect(center=(1920 / 2, 1080 / 2)))
         pygame.display.flip()
         clock = pygame.time.Clock()
-
         if traffic_generation:
             vehicle_list, all_id, all_actors = generate_traffic(vehicle_num=50,
                                                                 ped_num=50,
@@ -109,6 +108,8 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 assert simulation.currentTime == 0
                 # terminationReason = None
                 while maxSteps is None or simulation.currentTime < maxSteps:
+                    clock.tick(60)
+
                     display.fill(COLOR_ALUMINIUM_4)
                     simulation.rendering(display)
 
