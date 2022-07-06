@@ -41,7 +41,7 @@ def creat_agents(n_action, n_state_list, agent_name_list, load_model=True, curre
 def train(episodes=None, maxSteps=None, RL_agents_list=None,
           current_episodes=150, n_state_list=None,
           npc_vehicle_num = 50, npc_ped_num = 50,
-          traffic_generation = False, save_model=False, test_mode=True):
+          traffic_generation = False, save_model=False, test_mode=True, render_hud = True):
     scenario = scenic.scenarioFromFile('carlaChallenge10.scenic',
                                        model='scenic.simulators.carla.model')
     simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
@@ -54,21 +54,22 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
     simulation = None
 
     try:
-        # Init Pygame
-        pygame.init()
-        display = pygame.display.set_mode(
-            (1920, 1080),
-            pygame.HWSURFACE | pygame.DOUBLEBUF)
+        if render_hud:
+            # Init Pygame
+            pygame.init()
+            display = pygame.display.set_mode(
+                (1920, 1080),
+                pygame.HWSURFACE | pygame.DOUBLEBUF)
 
-        # Place a title to game window
-        pygame.display.set_caption('test')
+            # Place a title to game window
+            pygame.display.set_caption('test')
 
-        # Show loading screen
-        font = pygame.font.Font(pygame.font.get_default_font(), 20)
-        text_surface = font.render('Rendering map...', True, COLOR_WHITE)
-        display.blit(text_surface, text_surface.get_rect(center=(1920 / 2, 1080 / 2)))
-        pygame.display.flip()
-        clock = pygame.time.Clock()
+            # Show loading screen
+            font = pygame.font.Font(pygame.font.get_default_font(), 20)
+            text_surface = font.render('Rendering map...', True, COLOR_WHITE)
+            display.blit(text_surface, text_surface.get_rect(center=(1920 / 2, 1080 / 2)))
+            pygame.display.flip()
+            clock = pygame.time.Clock()
         if traffic_generation:
             vehicle_list, all_id, all_actors = generate_traffic(vehicle_num=50,
                                                                 ped_num=50,
@@ -108,12 +109,11 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 assert simulation.currentTime == 0
                 # terminationReason = None
                 while maxSteps is None or simulation.currentTime < maxSteps:
-                    clock.tick(60)
-
-                    display.fill(COLOR_ALUMINIUM_4)
-                    simulation.rendering(display)
-
-                    pygame.display.flip()
+                    if render_hud:
+                        clock.tick(60)
+                        display.fill(COLOR_ALUMINIUM_4)
+                        simulation.rendering(display)
+                        pygame.display.flip()
                     if simulation.verbosity >= 3:
                         print(f'    Time step {simulation.currentTime}:')
 
@@ -238,7 +238,7 @@ agent_name_list = ['path', 'speed']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=True, current_step=2300, test_mode=True)
 train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=0,
-      maxSteps=1000, n_state_list=n_state_list, traffic_generation=True, save_model=False, test_mode=True)
+      maxSteps=1000, n_state_list=n_state_list, traffic_generation=True, save_model=False, test_mode=True, render_hud=False)
 
 # simulation.run(maxSteps=None)
 #         result = simulation.trajectory

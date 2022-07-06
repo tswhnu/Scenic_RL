@@ -62,7 +62,7 @@ class CarlaSimulator(DrivingSimulator):
         # Set to synchronous with fixed timestep
         self.original_settings = self.world.get_settings()
         settings = self.world.get_settings()
-        settings.no_rendering_mode = True
+        settings.no_rendering_mode = False
         settings.synchronous_mode = True
         settings.fixed_delta_seconds = timestep  # NOTE: Should not exceed 0.1
         self.world.apply_settings(settings)
@@ -179,6 +179,7 @@ class CarlaSimulation(DrivingSimulation):
                 point2 = [point2[0], -point2[1]]
                 yaw = self.angle(point1=point1, point2=point2)
                 spawn_point = point1
+                carlaActor = None
                 while True:
                     try:
                         carlaActor = self.createObjectInSimulator(obj, yaw, spawn_point)
