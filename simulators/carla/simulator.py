@@ -27,6 +27,7 @@ import numpy as np
 from scenic.simulators.carla.utils.Reward_functions import *
 from agents.navigation.controller import *
 from bird_view.draw_routes import *
+from scenic.simulators.carla.utils.generate_traffic import *
 #########
 from scenic.domains.driving.simulators import DrivingSimulator, DrivingSimulation
 from scenic.core.simulators import SimulationCreationError
@@ -70,11 +71,11 @@ class CarlaSimulator(DrivingSimulator):
         self.record = record  # whether to use the carla recorder
         self.scenario_number = 0  # Number of the scenario executed
 
-    def createSimulation(self, scene, verbosity=0):
+    def createSimulation(self, scene, verbosity=0, traffic_generation=False):
         self.scenario_number += 1
         return CarlaSimulation(scene, self.client, self.tm, self.timestep,
                                render=self.render, record=self.record,
-                               scenario_number=self.scenario_number, verbosity=verbosity)
+                               scenario_number=self.scenario_number, verbosity=verbosity, traffic_generation=traffic_generation)
 
     def destroy(self):
         settings = self.world.get_settings()
@@ -87,7 +88,11 @@ class CarlaSimulator(DrivingSimulator):
 
 
 class CarlaSimulation(DrivingSimulation):
-    def __init__(self, scene, client, tm, timestep, render, record, scenario_number, verbosity=0, speed_limit=25):
+    def __init__(self, scene, client, tm,
+                 timestep, render, record,
+                 scenario_number, verbosity=0,
+                 speed_limit=25,
+                 traffic_generation=False):
         super().__init__(scene, timestep=timestep, verbosity=verbosity)
         self.client = client
         self.world = self.client.get_world()
@@ -108,6 +113,9 @@ class CarlaSimulation(DrivingSimulation):
         self.ego_brake = 0
         self.ego_steer = 0
         self.waypoint_path = []
+        self.other_vehicles = []
+        self.peds = []
+        self.peds_ids = []
         ##################
 
         weather = scene.params.get("weather")
@@ -173,19 +181,6 @@ class CarlaSimulation(DrivingSimulation):
                     location = [path[i][0].transform.location.x, path[i][0].transform.location.y]
                     temp_path.append(location)
                 self.reference_route = np.array(temp_path)
-
-                # for i in range(len(self.ego.trajectory)):
-                #     if i == 2:
-                #         self.reference_route += list(self.ego.trajectory[i].centerline.points)
-                #     else:
-                #         self.reference_route += list(self.ego.trajectory[i].centerline.points[0:-1])
-                # self.reference_route = np.array(self.reference_route)
-                # # there need to have a transfer between the scenic position and carla position
-                # self.reference_route[:, 0] = self.reference_route[:, 0]
-                # self.reference_route[:, 1] = -self.reference_route[:, 1]
-                # plt.scatter(temp_path[:,0], temp_path[:,1])
-                # # plt.plot(self.reference_route[:,0], self.reference_route[:,1])
-                # plt.show()
                 ###################################################################################
                 # the starting and end point of the trajectory
                 self.ego_spawn_point = [self.reference_route[0, 0], self.reference_route[0, 1]]
@@ -194,6 +189,11 @@ class CarlaSimulation(DrivingSimulation):
                 self.tra_point_index = self.find_closest_point(self.reference_route, self.ego_spawn_point)
                 if self.tra_point_index == 0:
                     self.tra_point_index += 1
+                # if need traffic generation in the scenario
+                if traffic_generation:
+                    self.other_vehicles, self.peds_ids, self.peds = generate_traffic(vehicle_num=50,
+                                                                        ped_num=50,
+                                                                        carla_client=self.client)
                 ###########################################################
                 # add routeplanner for vehicles in carla
                 self.route_planner = GlobalRoutePlanner(self.map, sampling_resolution=2.0)
@@ -232,23 +232,6 @@ class CarlaSimulation(DrivingSimulation):
                     obj.carlaActor.set_velocity(equivVel)
 
     ########################################################################################################################
-    # def trace_route(self, waypoint_mode=False, points_num=3):
-    #     # here the destination is the last point of the endline
-    #     destination = self.ego.trajectory[2].centerline.points[-1]
-    #     destination = carla.Location(x=destination[0], y=destination[1], z=0.5)
-    #     current_location = utils.scenicToCarlaLocation(self.ego.position, world=self.world,
-    #                                                    blueprint=self.ego.blueprint)
-    #     trace = self.route_planner.trace_route(current_location, destination)
-    #     if len(trace) < points_num:
-    #         for i in range(points_num - len(trace)):
-    #             trace.append(trace[-1])
-    #     else:
-    #         # here we pickup first n points in the waypoints list
-    #         trace = trace[:points_num]
-    #     if not waypoint_mode:
-    #         return [[i[0].transform.location.x, i[0].transform.location.y] for i in trace]
-    #     else:
-    #         return trace
     def trace_route(self, point_num=3):
         # here giving the future three points based on the current trajectory and the vehicle position
         route = self.reference_route[(self.tra_point_index - 1):self.tra_point_index + point_num - 1]
@@ -572,3 +555,12 @@ class CarlaSimulation(DrivingSimulation):
 
         self.world.tick()
         super().destroy()
+    def final_destroy(self):
+        print('\ndestroying %d vehicles' % len(self.other_vehicles))
+        self.client.apply_batch([carla.command.DestroyActor(x) for x in self.other_vehicles])
+        # stop walker controllers (list is [controller, actor, controller, actor ...])
+        for i in range(0, len(self.peds_ids), 2):
+            self.peds[i].stop()
+        print('\ndestroying %d walkers' % len(self.peds_ids) / 2)
+        self.client.apply_batch([carla.command.DestroyActor(x) for x in self.peds_ids])
+        time.sleep(0.5)

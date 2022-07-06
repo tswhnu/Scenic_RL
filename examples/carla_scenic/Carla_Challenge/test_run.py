@@ -44,10 +44,6 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
     scenario = scenic.scenarioFromFile('carlaChallenge10.scenic',
                                        model='scenic.simulators.carla.model')
     simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
-    if traffic_generation:
-        vehicle_list, all_id, all_actors = generate_traffic(vehicle_num=npc_vehicle_num,
-                                                            ped_num=npc_ped_num,
-                                                            carla_client=simulator.client)
 
     threshold_list = np.array([3, 2])
     TH_start = 0.8
@@ -58,7 +54,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
     try:
         for episode in range(current_episodes, episodes):
             scene, _ = scenario.generate()
-            simulation = simulator.createSimulation(scene)
+            simulation = simulator.createSimulation(scene, traffic_generation=traffic_generation)
 
             last_position = None
             actionSequence = []
@@ -218,14 +214,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 veneer.endSimulation(simulation)
     finally:
         if traffic_generation:
-            print('\ndestroying %d vehicles' % len(vehicle_list))
-            simulator.client.apply_batch([carla.command.DestroyActor(x) for x in vehicle_list])
-            # stop walker controllers (list is [controller, actor, controller, actor ...])
-            for i in range(0, len(all_id), 2):
-                all_actors[i].stop()
-            print('\ndestroying %d walkers' % len(all_id) / 2)
-            simulator.client.apply_batch([carla.command.DestroyActor(x) for x in all_id])
-            time.sleep(0.5)
+            simulation.final_destroy()
         else:
             pass
 n_action = 5
@@ -236,7 +225,7 @@ agent_name_list = ['path', 'speed']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=True, current_step=2300, test_mode=True)
 train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=0,
-      maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=False, test_mode=True)
+      maxSteps=1000, n_state_list=n_state_list, traffic_generation=True, save_model=False, test_mode=True)
 
 # simulation.run(maxSteps=None)
 #         result = simulation.trajectory
