@@ -41,7 +41,7 @@ def creat_agents(n_action, n_state_list, agent_name_list, load_model=True, curre
 def train(episodes=None, maxSteps=None, RL_agents_list=None,
           current_episodes=150, n_state_list=None,
           npc_vehicle_num = 50, npc_ped_num = 50,
-          traffic_generation = False, save_model=False, test_mode=True, render_hud = True):
+          traffic_generation = False, save_model=False, test_mode=True, render_hud = True, save_log=False):
     scenario = scenic.scenarioFromFile('carlaChallenge10.scenic',
                                        model='scenic.simulators.carla.model')
     simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
@@ -76,8 +76,10 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                                                                 carla_client=simulator.client)
 
         for episode in range(current_episodes, episodes):
+
             scene, _ = scenario.generate()
-            simulation = simulator.createSimulation(scene)
+            simulation = simulator.createSimulation(scene, render_hud=render_hud)
+            simulation.episode = episode
 
             last_position = None
             actionSequence = []
@@ -110,9 +112,10 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 # terminationReason = None
                 while maxSteps is None or simulation.currentTime < maxSteps:
                     if render_hud:
-                        clock.tick(60)
+                        simulation.clock.tick(60)
                         display.fill(COLOR_ALUMINIUM_4)
                         simulation.rendering(display)
+                        simulation.hud.render(display)
                         pygame.display.flip()
                     if simulation.verbosity >= 3:
                         print(f'    Time step {simulation.currentTime}:')
@@ -188,7 +191,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 # route = np.array(route)
                 # trajectory = np.array(trajectory)
                 # simulation.draw_trace(simulation.driving_trajectory)
-                if save_model:
+                if save_log:
                     np.save("./log_01/reward_list" + str(episode) + ".npy", reward_array)
                     np.save("./log_01/vehicle_trajectory" + str(episode) + ".npy", simulation.reference_route)
                     np.save("./log_01/reference_route" + str(episode) + ".npy", simulation.driving_trajectory)
@@ -225,7 +228,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             # stop walker controllers (list is [controller, actor, controller, actor ...])
             for i in range(0, len(all_id), 2):
                 all_actors[i].stop()
-            print('\ndestroying' +  str(len(all_actors) // 2) + ' %d walkers')
+            print('\ndestroying ' +  str(len(all_actors) // 2) + ' walkers')
             simulator.client.apply_batch([carla.command.DestroyActor(x) for x in all_id])
             time.sleep(0.5)
         else:
@@ -238,7 +241,8 @@ agent_name_list = ['path', 'speed']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=True, current_step=2300, test_mode=True)
 train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=0,
-      maxSteps=1000, n_state_list=n_state_list, traffic_generation=True, save_model=False, test_mode=True, render_hud=False)
+      maxSteps=1000, n_state_list=n_state_list, traffic_generation=True, save_model=False, test_mode=True,
+      render_hud=False, save_log=False)
 
 # simulation.run(maxSteps=None)
 #         result = simulation.trajectory

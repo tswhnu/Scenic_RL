@@ -227,9 +227,9 @@ class CollisionSensor(object):
         if not self:
             return
         actor_type = get_actor_display_name(event.other_actor)
-        if self._hud:
-            self._hud.notification('Collision with %r, id = %d'
-                                   % (actor_type, event.other_actor.id))
+        if self.hud:
+            self.hud.notification('Collision with %r, id = %d'
+                                  % (actor_type, event.other_actor.id))
         impulse = event.normal_impulse
         intensity = math.sqrt(impulse.x ** 2 + impulse.y ** 2 + impulse.z ** 2)
         self._history.append((event.frame, intensity))
@@ -308,12 +308,12 @@ class CameraManager(object):
 			points = np.frombuffer(image.raw_data, dtype=np.dtype('f4'))
 			points = np.reshape(points, (int(points.shape[0] / 3), 3))
 			lidar_data = np.array(points[:, :2])
-			lidar_data *= min(self._hud.dim) / 100.0
-			lidar_data += (0.5 * self._hud.dim[0], 0.5 * self._hud.dim[1])
+			lidar_data *= min(self.hud.dim) / 100.0
+			lidar_data += (0.5 * self.hud.dim[0], 0.5 * self.hud.dim[1])
 			lidar_data = np.fabs(lidar_data)
 			lidar_data = lidar_data.astype(np.int32)
 			lidar_data = np.reshape(lidar_data, (-1, 2))
-			lidar_img_size = (self._hud.dim[0], self._hud.dim[1], 3)
+			lidar_img_size = (self.hud.dim[0], self.hud.dim[1], 3)
 			lidar_img = np.zeros(lidar_img_size)
 			lidar_img[tuple(lidar_data.T)] = (255, 255, 255)
 			self._surface = pygame.surfarray.make_surface(lidar_img)

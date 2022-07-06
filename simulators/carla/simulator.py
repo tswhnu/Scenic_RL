@@ -72,11 +72,11 @@ class CarlaSimulator(DrivingSimulator):
         self.record = record  # whether to use the carla recorder
         self.scenario_number = 0  # Number of the scenario executed
 
-    def createSimulation(self, scene, verbosity=0):
+    def createSimulation(self, scene, verbosity=0, render_hud=False):
         self.scenario_number += 1
         return CarlaSimulation(scene, self.client, self.tm, self.timestep,
                                render=self.render, record=self.record,
-                               scenario_number=self.scenario_number, verbosity=verbosity)
+                               scenario_number=self.scenario_number, verbosity=verbosity, render_hud=render_hud)
 
     def destroy(self):
         settings = self.world.get_settings()
@@ -92,7 +92,7 @@ class CarlaSimulation(DrivingSimulation):
     def __init__(self, scene, client, tm,
                  timestep, render, record,
                  scenario_number, verbosity=0,
-                 speed_limit=25):
+                 speed_limit=25, render_hud=False):
         super().__init__(scene, timestep=timestep, verbosity=verbosity)
         self.client = client
         self.world = self.client.get_world()
@@ -112,6 +112,8 @@ class CarlaSimulation(DrivingSimulation):
         self.ego_throttle = 0
         self.ego_brake = 0
         self.ego_steer = 0
+        self.ego_steer_action = 0
+        self.ego_throttle_action = 0
         self.waypoint_path = []
         self.other_vehicles = []
         self.peds = []
@@ -120,44 +122,49 @@ class CarlaSimulation(DrivingSimulation):
         self.hero_transform = None
         self.traffic_light_surfaces = TrafficLightSurfaces()
         self.actors_with_transforms = None
+        self.clock = pygame.time.Clock()
+        self.affected_traffic_light = None
+        self.episode = 0
+        self.render_hud = render_hud
         ##################
-        # preparation of the HUD surface
-        self.map_image = MapImage(carla_world=self.world,
-                                  carla_map=self.map,
-                                  pixels_per_meter=PIXELS_PER_METER,
-                                  show_triggers=False,
-                                  show_connections=False,
-                                  show_spawn_points=False)
-        self._hud = HUD('test', 1920, 1080)
-        self.input_control = InputControl('test')
+        if render_hud:
+            # preparation of the HUD surface
+            self.map_image = MapImage(carla_world=self.world,
+                                      carla_map=self.map,
+                                      pixels_per_meter=PIXELS_PER_METER,
+                                      show_triggers=False,
+                                      show_connections=False,
+                                      show_spawn_points=False)
+            self.hud = HUD('test', 1920, 1080)
+            self.input_control = InputControl('test')
 
-        self.original_surface_size = min(self._hud.dim[0], self._hud.dim[1])
-        self.surface_size = self.map_image.big_map_surface.get_width()
+            self.original_surface_size = min(self.hud.dim[0], self.hud.dim[1])
+            self.surface_size = self.map_image.big_map_surface.get_width()
 
-        self.scaled_size = int(self.surface_size)
-        self.prev_scaled_size = int(self.surface_size)
+            self.scaled_size = int(self.surface_size)
+            self.prev_scaled_size = int(self.surface_size)
 
-        # Render Actors
-        self.actors_surface = pygame.Surface((self.map_image.surface.get_width(), self.map_image.surface.get_height()))
-        self.actors_surface.set_colorkey(COLOR_BLACK)
+            # Render Actors
+            self.actors_surface = pygame.Surface((self.map_image.surface.get_width(), self.map_image.surface.get_height()))
+            self.actors_surface.set_colorkey(COLOR_BLACK)
 
-        self.vehicle_id_surface = pygame.Surface((self.surface_size, self.surface_size)).convert()
-        self.vehicle_id_surface.set_colorkey(COLOR_BLACK)
+            self.vehicle_id_surface = pygame.Surface((self.surface_size, self.surface_size)).convert()
+            self.vehicle_id_surface.set_colorkey(COLOR_BLACK)
 
-        self.border_round_surface = pygame.Surface(self._hud.dim, pygame.SRCALPHA).convert()
-        self.border_round_surface.set_colorkey(COLOR_WHITE)
-        self.border_round_surface.fill(COLOR_BLACK)
+            self.border_round_surface = pygame.Surface(self.hud.dim, pygame.SRCALPHA).convert()
+            self.border_round_surface.set_colorkey(COLOR_WHITE)
+            self.border_round_surface.fill(COLOR_BLACK)
 
-        # Used for Hero Mode, draws the map contained in a circle with white border
-        center_offset = (int(self._hud.dim[0] / 2), int(self._hud.dim[1] / 2))
-        pygame.draw.circle(self.border_round_surface, COLOR_ALUMINIUM_1, center_offset, int(self._hud.dim[1] / 2))
-        pygame.draw.circle(self.border_round_surface, COLOR_WHITE, center_offset, int((self._hud.dim[1] - 8) / 2))
+            # Used for Hero Mode, draws the map contained in a circle with white border
+            center_offset = (int(self.hud.dim[0] / 2), int(self.hud.dim[1] / 2))
+            pygame.draw.circle(self.border_round_surface, COLOR_ALUMINIUM_1, center_offset, int(self.hud.dim[1] / 2))
+            pygame.draw.circle(self.border_round_surface, COLOR_WHITE, center_offset, int((self.hud.dim[1] - 8) / 2))
 
-        scaled_original_size = self.original_surface_size * (1.0 / 0.9)
-        self.hero_surface = pygame.Surface((scaled_original_size, scaled_original_size)).convert()
+            scaled_original_size = self.original_surface_size * (1.0 / 0.9)
+            self.hero_surface = pygame.Surface((scaled_original_size, scaled_original_size)).convert()
 
-        self.result_surface = pygame.Surface((self.surface_size, self.surface_size)).convert()
-        self.result_surface.set_colorkey(COLOR_BLACK)
+            self.result_surface = pygame.Surface((self.surface_size, self.surface_size)).convert()
+            self.result_surface.set_colorkey(COLOR_BLACK)
 
 
         ##################
@@ -195,7 +202,7 @@ class CarlaSimulation(DrivingSimulation):
                 self.ego = obj
                 self.hero_actor = self.ego.carlaActor
                 ##################################################################################
-                route_planner = GlobalRoutePlanner(wmap=self.map, sampling_resolution=4.0)
+                route_planner = GlobalRoutePlanner(wmap=self.map, sampling_resolution=1.0)
                 start_point = self.ego.trajectory[0].centerline.points[0]
                 end_point = self.ego.trajectory[-1].centerline.points[-1]
                 start_point = carla.Location(x=start_point[0], y=-start_point[1], z=0.5)
@@ -272,10 +279,12 @@ class CarlaSimulation(DrivingSimulation):
 
 
     def tick(self):
-        actors = self.world.get_actors()
-        self.actors_with_transforms = [(actor, actor.get_transform()) for actor in actors]
-        if self.hero_actor is not None:
-            self.hero_transform = self.hero_actor.get_transform()
+        if self.render_hud:
+            actors = self.world.get_actors()
+            self.actors_with_transforms = [(actor, actor.get_transform()) for actor in actors]
+            if self.hero_actor is not None:
+                self.hero_transform = self.hero_actor.get_transform()
+            self.update_hud_info(self.clock)
         self.world.tick()
 
     def destination_reward_test(self, destination, ego_location):
@@ -391,6 +400,55 @@ class CarlaSimulation(DrivingSimulation):
 
     ####################################################################################################################
     # HUD rendering part
+    def update_hud_info(self, clock):
+        """Updates the HUD info regarding simulation, hero mode and whether there is a traffic light affecting the hero actor"""
+
+        hero_mode_text = []
+        if self.hero_actor is not None:
+            hero_speed = self.hero_actor.get_velocity()
+            hero_speed_text = 3.6 * math.sqrt(hero_speed.x ** 2 + hero_speed.y ** 2 + hero_speed.z ** 2)
+
+            affected_traffic_light_text = 'None'
+            if self.affected_traffic_light is not None:
+                state = self.affected_traffic_light.state
+                if state == carla.TrafficLightState.Green:
+                    affected_traffic_light_text = 'GREEN'
+                elif state == carla.TrafficLightState.Yellow:
+                    affected_traffic_light_text = 'YELLOW'
+                else:
+                    affected_traffic_light_text = 'RED'
+
+            affected_speed_limit_text = self.hero_actor.get_speed_limit()
+            if math.isnan(affected_speed_limit_text):
+                affected_speed_limit_text = 0.0
+            hero_mode_text = [
+                'Hero Mode:                 ON',
+                'Hero ID:              %7d' % self.hero_actor.id,
+                'Hero Vehicle:  %14s' % get_actor_display_name(self.hero_actor, truncate=14),
+                'Hero Speed:          %3d km/h' % hero_speed_text,
+                'Hero Affected by:',
+                'Hero current steer:   %.2f:' % self.ego_steer,
+                'Hero current throttle: %.2f:' % self.ego_throttle,
+                'Hero current brake: %.2fd' % self.ego_brake,
+                'Hero current steer action: %.2f' % self.ego_steer_action,
+                'Hero current throttle / brake action: %.2f' % self.ego_throttle_action,
+                '  Traffic Light: %12s' % affected_traffic_light_text,
+                '  Speed Limit:       %3d km/h' % affected_speed_limit_text
+            ]
+        else:
+            hero_mode_text = ['Hero Mode:                OFF']
+
+        self.server_fps = self.clock.get_fps()
+        self.server_fps = 'inf' if self.server_fps == float('inf') else round(self.server_fps)
+        info_text = [
+            'Server:  % 16s FPS' % self.server_fps,
+            'Client:  % 16s FPS' % round(clock.get_fps()),
+            'Map Name:          %10s' % self.map.name,
+            'current_episode: %3d' % self.episode
+        ]
+
+        self.hud.add_info('test', info_text)
+        self.hud.add_info('HERO', hero_mode_text)
     def _split_actors(self):
         """Splits the retrieved actors by type id"""
         vehicles = []
@@ -583,8 +641,8 @@ class CarlaSimulation(DrivingSimulation):
             walkers)
 
         # Render Ids
-        self._hud.render_vehicles_ids(self.vehicle_id_surface, vehicles,
-                                      self.map_image.world_to_pixel, self.hero_actor, self.hero_transform)
+        self.hud.render_vehicles_ids(self.vehicle_id_surface, vehicles,
+                                     self.map_image.world_to_pixel, self.hero_actor, self.hero_transform)
 
         # Blit surfaces
         surfaces = ((self.map_image.surface, (0, 0)),
@@ -634,7 +692,7 @@ class CarlaSimulation(DrivingSimulation):
 
             # Apply clipping rect
             clipping_rect = pygame.Rect(-translation_offset[0] - center_offset[0], -translation_offset[1],
-                                        self._hud.dim[0], self._hud.dim[1])
+                                        self.hud.dim[0], self.hud.dim[1])
             self.clip_surfaces(clipping_rect)
             Util.blits(self.result_surface, surfaces)
 
@@ -705,30 +763,40 @@ class CarlaSimulation(DrivingSimulation):
         # steer action
         if actions[0] == 0:
             self.ego_steer -= 0.1
+            self.ego_steer_action = -0.1
         elif actions[0] == 1:
             self.ego_steer -= 0.05
+            self.ego_steer_action = -0.05
         elif actions[0] == 2:
             pass
+            self.ego_steer_action = 0
         elif actions[0] == 3:
             self.ego_steer += 0.05
+            self.ego_steer_action = 0.05
         elif actions[0] == 4:
            self.ego_steer += 0.1
+           self.ego_steer_action = 0.1
 
         if actions[1] == 0:
             throttle = 1.0
+            self.ego_throttle_action = 1.0
             brake = 0.0
         elif actions[1] == 1:
             throttle = 0.5
             brake = 0.0
+            self.ego_throttle_action = 0.5
         elif actions[1] == 2:
             throttle = 0.0
+            self.ego_throttle_action = 0
             brake = 0.0
         elif actions[1] == 3:
             throttle = 0.0
             brake = 0.5
+            self.ego_throttle_action = -0.5
         elif actions[1] == 4:
             throttle = 0.0
             brake = 1.0
+            self.ego_throttle_action = -1.0
         # limit the range of steer angle
         if self.ego_steer < 0:
             self.ego_steer = max(-0.8, self.ego_steer)
