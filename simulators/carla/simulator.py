@@ -62,7 +62,7 @@ class CarlaSimulator(DrivingSimulator):
         # Set to synchronous with fixed timestep
         self.original_settings = self.world.get_settings()
         settings = self.world.get_settings()
-        settings.no_rendering_mode = False
+        settings.no_rendering_mode = True
         settings.synchronous_mode = True
         settings.fixed_delta_seconds = timestep  # NOTE: Should not exceed 0.1
         self.world.apply_settings(settings)
@@ -214,7 +214,7 @@ class CarlaSimulation(DrivingSimulation):
                 self.ego = obj
                 self.hero_actor = self.ego.carlaActor
                 ##################################################################################
-                route_planner = GlobalRoutePlanner(wmap=self.map, sampling_resolution=2.0)
+                route_planner = GlobalRoutePlanner(wmap=self.map, sampling_resolution=4.0)
                 start_point = self.ego.trajectory[0].centerline.points[0]
                 end_point = self.ego.trajectory[-1].centerline.points[-1]
                 start_point = carla.Location(x=start_point[0], y=-start_point[1], z=0.5)
