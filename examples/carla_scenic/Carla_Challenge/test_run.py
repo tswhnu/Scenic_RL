@@ -105,7 +105,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 initial_state= simulation.get_state()
                 initial_ego_position = np.array([simulation.ego.carlaActor.get_location().x,
                                                  simulation.ego.carlaActor.get_location().y])
-                state_list = [initial_state[1], initial_state[0][0:n_state_list[1]], initial_state[0][-2:]]
+                state_list = [initial_state[1], initial_state[0], initial_state[0][-2:]]
                 last_position = initial_ego_position
                 ###################################################################################
                 # Run simulation
@@ -153,7 +153,6 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                             else:
                                 action = RL_agents_list[i].MO_action_selection(action_seq[0], state_list[i])
                             action_seq.append(action)
-                        action_seq[0] = 0
                     else:
                         action = RL_agents_list[0].select_action(state_list[0])
                         action_seq = [action]
@@ -161,7 +160,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     new_state, reward, done, _ = simulation.step(
                         actions=action_seq,
                         last_position=last_position)  # here need to notice that the reward value here will be a list
-                    new_state_list = [new_state[1], new_state[0][0:n_state_list[1]], new_state[0][-2:]]
+                    new_state_list = [new_state[1], new_state[0], new_state[0][-2:]]
                     # here we got tge cumulative reward of the current episode
                     epi_reward += reward
 
@@ -256,7 +255,7 @@ agent_name_list = ['collision', 'path', 'speed']
 RL_agents_list = creat_agents(n_action=n_action_list, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=load_model, current_step=step_list, test_mode=test_list)
 train(episodes=1000, RL_agents_list=RL_agents_list, current_episodes=0,
-      maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=save_model, test_list=test_list,
+      maxSteps=1000, n_state_list=n_state_list, traffic_generation=True, save_model=save_model, test_list=test_list,
       render_hud=False, save_log=False)
 
 # simulation.run(maxSteps=None)
