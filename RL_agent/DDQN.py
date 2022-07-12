@@ -92,9 +92,14 @@ class DDQN(object):
         # here directly output the action value
         return self.policy_net.forward(state)
 
-    def MO_action_selection(self, action_set, state):
-        state = torch.unsqueeze(torch.tensor(state), dim=0)
-        action_value = self.policy_net.forward(state)
+    def MO_action_selection(self, pre_action, state):
+        if pre_action == 0:
+            action = self.select_action(state)
+        else:
+            action_value = self.action_value(state).data.cpu().numpy()[0]
+            action = np.argmax(action_value[-2:]) + 3
+
+        return action
 
     def select_action(self, state):
         state = torch.unsqueeze(torch.tensor(state), dim=0)
