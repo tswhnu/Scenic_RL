@@ -40,7 +40,7 @@ def creat_agents(n_action, n_state_list, agent_name_list, load_model=True, curre
 
 def train(episodes=None, maxSteps=None, RL_agents_list=None,
           current_episodes=150, n_state_list=None,
-          npc_vehicle_num = 50, npc_ped_num = 50,
+          npc_vehicle_num = 100, npc_ped_num = 100,
           traffic_generation = False, save_model=False, test_mode=True, render_hud = True, save_log=False):
     scenario = scenic.scenarioFromFile('carlaChallenge10.scenic',
                                        model='scenic.simulators.carla.model')
@@ -71,8 +71,8 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             pygame.display.flip()
             clock = pygame.time.Clock()
         if traffic_generation:
-            vehicle_list, all_id, all_actors = generate_traffic(vehicle_num=50,
-                                                                ped_num=50,
+            vehicle_list, all_id, all_actors = generate_traffic(vehicle_num=npc_vehicle_num,
+                                                                ped_num=npc_ped_num,
                                                                 carla_client=simulator.client)
 
         for episode in range(current_episodes, episodes):
@@ -89,6 +89,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             ##########################################################
             start_time = time.time()
             epi_reward = np.zeros(2)
+            totoal_reward = np.zeros(2)
             route = []
             #########################################################
 
@@ -171,6 +172,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                             RL_agent.optimize_model()
                     if done:
                         print("reward_info: ", epi_reward / simulation.currentTime)
+                        totoal_reward += epi_reward /simulation.currentTime
                         reward_list.append(epi_reward / simulation.currentTime)
                         reward_array = np.array(reward_list)
 
@@ -212,6 +214,8 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     print("saving model")
                     for RL_agent in RL_agents_list:
                         RL_agent.save_model(episode)
+                    if episode != 0:
+                        print('total reward:', totoal_reward / episode)
                 ##############################################################################
                 simulation.destroy()
                 for obj in simulation.scene.objects:
@@ -233,15 +237,16 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             time.sleep(0.5)
         else:
             pass
+
 n_action = 5
 # n_state_list = [7, 2]
 # agent_name_list = ['path', 'speed']
 n_state_list = [8, 2]
 agent_name_list = ['path', 'speed']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
-                              load_model=True, current_step=2300, test_mode=True)
-train(episodes=5000, RL_agents_list=RL_agents_list, current_episodes=0,
-      maxSteps=1000, n_state_list=n_state_list, traffic_generation=True, save_model=False, test_mode=True,
+                              load_model=True, current_step=2400, test_mode=True)
+train(episodes=1000, RL_agents_list=RL_agents_list, current_episodes=0,
+      maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=False, test_mode=True,
       render_hud=False, save_log=False)
 
 # simulation.run(maxSteps=None)

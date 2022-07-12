@@ -29,6 +29,7 @@ from agents.navigation.controller import *
 from bird_view.draw_routes import *
 from scenic.simulators.carla.utils.generate_traffic import *
 from scenic.simulators.carla.utils.HUD_render import *
+from shapely.geometry import LineString, Point
 #########
 from scenic.domains.driving.simulators import DrivingSimulator, DrivingSimulation
 from scenic.core.simulators import SimulationCreationError
@@ -126,6 +127,11 @@ class CarlaSimulation(DrivingSimulation):
         self.affected_traffic_light = None
         self.episode = 0
         self.render_hud = render_hud
+        self.danger_actor = None
+        # here define the safety distance that should detect other actros
+        self.detect_range = self.speed_limit / 1.8
+        # this attribute define the distance between the waypoint
+        self.sample_resolution = 2.0
         ##################
         if render_hud:
             # preparation of the HUD surface
@@ -154,6 +160,8 @@ class CarlaSimulation(DrivingSimulation):
             self.border_round_surface = pygame.Surface(self.hud.dim, pygame.SRCALPHA).convert()
             self.border_round_surface.set_colorkey(COLOR_WHITE)
             self.border_round_surface.fill(COLOR_BLACK)
+
+
 
             # Used for Hero Mode, draws the map contained in a circle with white border
             center_offset = (int(self.hud.dim[0] / 2), int(self.hud.dim[1] / 2))
@@ -201,8 +209,9 @@ class CarlaSimulation(DrivingSimulation):
             if obj is self.objects[0]:
                 self.ego = obj
                 self.hero_actor = self.ego.carlaActor
+                # self.hero_actor.set_autopilot(True, self.tm.get_port())
                 ##################################################################################
-                route_planner = GlobalRoutePlanner(wmap=self.map, sampling_resolution=1.0)
+                route_planner = GlobalRoutePlanner(wmap=self.map, sampling_resolution=self.sample_resolution)
                 start_point = self.ego.trajectory[0].centerline.points[0]
                 end_point = self.ego.trajectory[-1].centerline.points[-1]
                 start_point = carla.Location(x=start_point[0], y=-start_point[1], z=0.5)
@@ -224,7 +233,7 @@ class CarlaSimulation(DrivingSimulation):
                     self.tra_point_index += 1
                 ###########################################################
                 # add routeplanner for vehicles in carla
-                self.route_planner = GlobalRoutePlanner(self.map, sampling_resolution=2.0)
+                self.route_planner = GlobalRoutePlanner(self.map, sampling_resolution=1.0)
 
                 # add collision sensor to the ego vehicle
                 # osition of the collision sensor
@@ -233,6 +242,12 @@ class CarlaSimulation(DrivingSimulation):
                 self.collision_sensor = self.world.spawn_actor(collision_sensor, transform, attach_to=carlaActor)
                 self.collision_sensor.listen(lambda event: self.collision_data(event))
 
+        # danger_point = [self.reference_route[2, 0], self.reference_route[2, 1]]
+        # print(danger_point, self.ego_spawn_point)
+        # danger_yaw = self.angle(self.reference_route[1], self.reference_route[2])
+        # danger_tramnsform = carla.Transform(carla.Location(x=danger_point[0], y=danger_point[1], z=0.5), carla.Rotation(yaw=danger_yaw))
+        # danger_car = self.blueprintLib.find('vehicle.audi.a2')
+        # test_vehicle = self.world.spawn_actor(danger_car, transform)
 
         self.tick()  ## allowing manualgearshift to take effect 	# TODO still need this?
 
@@ -301,6 +316,7 @@ class CarlaSimulation(DrivingSimulation):
             angle_diff -= 360
         return angle_diff
 
+
     def get_state(self):
         # route = np.array(self.trace_route())
         # trace = np.array(self.trace_route()).reshape(-1)
@@ -329,17 +345,30 @@ class CarlaSimulation(DrivingSimulation):
         # calculate difference
         # the distance between the vehicle and current route
         route_distance = self.route_distance(route[0], route[1], ego_location)
-        # the distance between the vechile and precious waypoint
+        # the distance between the vechile and previous waypoint
         distance1 = self.distance(ego_location, route[0])
         # dustance between the previous waypoint and current waypoint
         distance2 = self.distance(route[0], route[1])
         angle_diff1 = self.angle_diff(angle1)
         angle_diff2 = self.angle_diff(angle2)
 
-        state = np.array([route_distance, distance1, distance2, angle_diff1, angle_diff2,
+
+        state1 = np.array([route_distance, distance1, distance2, angle_diff1, angle_diff2,
                           self.ego_steer, current_speed, self.speed_limit]).astype(np.single)
 
-        return state
+        ## state information for collision avoidence agent
+        # dangerous_actor_transform = self.danger_actor.get_transform()
+        # danger_heading = dangerous_actor_transform.rotation.yaw
+        # relative_heading = self.angle_diff(danger_heading)
+        # relative_location = [dangerous_actor_transform.location.x - ego_location[0],
+        #                     dangerous_actor_transform.location.y - ego_location[1]]
+        # danger_speed = [self.danger_actor.get_velocity().x, self.danger_actor.get_velocity().y]
+        # danger_vel = math.sqrt(danger_speed[0] ** 2 + danger_speed[1] ** 2)
+        # danger_vel = danger_vel * 3.6
+        # relative_speed = danger_vel
+
+        # state2 = [relative_location, relative_heading]
+        return state1
 
         # return np.append(trace, [ego_location, ego_speed]).astype(np.single)
 
@@ -397,6 +426,37 @@ class CarlaSimulation(DrivingSimulation):
 
     def collision_data(self, event):
         self.collision_history.append(event)
+    def get_front_actors(self):
+        """
+        find the ators that occur in the range of future route
+        :return: the actor information
+        """
+        point_num = int(self.detect_range // self.sample_resolution) + 3
+        current_route = self.reference_route[self.tra_point_index+1:self.tra_point_index + point_num + 1]
+        line_list = []
+        ego_location = [self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y]
+        for i in range(len(current_route)):
+            line_list.append((current_route[i,0], current_route[i,1]))
+        if len(line_list) <= 1:
+            line1 = Point(self.reference_route[-1])
+        else:
+            line1 = LineString(line_list)
+        actors = self.world.get_actors()
+        self.danger_actor = None
+        min_distance = 20
+        test_actor_list = []
+        for actor in actors:
+            if actor.id == self.ego.carlaActor.id:
+                continue
+            elif 'vehicle' in actor.type_id or 'walker.pedestrian' in actor.type_id:
+                test_actor_list.append(actor)
+
+        for actor in test_actor_list:
+            point = Point([actor.get_location().x, actor.get_location().y])
+            distance_to_ego = self.distance([point.x, point.y], ego_location)
+            if line1.distance(point) < 2 and distance_to_ego < min_distance:
+                self.danger_actor = actor
+                min_distance = distance_to_ego
 
     ####################################################################################################################
     # HUD rendering part
@@ -531,7 +591,10 @@ class CarlaSimulation(DrivingSimulation):
     def _render_walkers(self, surface, list_w, world_to_pixel):
         """Renders the walkers' bounding boxes"""
         for w in list_w:
-            color = COLOR_PLUM_0
+            if self.danger_actor is not None and w[0].id == self.danger_actor.id:
+                color = pygame.Color(255, 0, 0)
+            else:
+                color = COLOR_PLUM_0
 
             # Compute bounding box points
             bb = w[0].bounding_box.extent
@@ -548,7 +611,12 @@ class CarlaSimulation(DrivingSimulation):
     def _render_vehicles(self, surface, list_v, world_to_pixel):
         """Renders the vehicles' bounding boxes"""
         for v in list_v:
-            color = COLOR_SKY_BLUE_0
+            if v[0].id == self.ego.carlaActor.id:
+                color = pygame.Color(0, 255, 0)
+            elif self.danger_actor is not None and v[0].id == self.danger_actor.id:
+                color = pygame.Color(255, 0, 0)
+            else:
+                color = COLOR_SKY_BLUE_0
             if int(v[0].attributes['number_of_wheels']) == 2:
                 color = COLOR_CHOCOLATE_1
             if v[0].attributes['role_name'] == 'hero':
@@ -566,7 +634,8 @@ class CarlaSimulation(DrivingSimulation):
             corners = [world_to_pixel(p) for p in corners]
             pygame.draw.lines(surface, color, False, corners, int(math.ceil(4.0 * self.map_image.scale)))
     def _render_routes(self, surface, world_to_pixel):
-        future_route = self.reference_route[self.tra_point_index:(self.tra_point_index+5)]
+        point_num = int(self.detect_range // self.sample_resolution)
+        future_route = self.reference_route[self.tra_point_index+1:(self.tra_point_index+point_num + 1)]
         route_carla = [carla.Location(x=point[0], y=point[1]) for point in future_route]
         route_carla = [world_to_pixel(p) for p in route_carla]
         whole_route = self.reference_route
@@ -816,6 +885,8 @@ class CarlaSimulation(DrivingSimulation):
         ego_location = [self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y]
         ego_speed = [self.ego.carlaActor.get_velocity().x, self.ego.carlaActor.get_velocity().y]
         final_destination = self.reference_route[-1]
+        self.get_front_actors()
+        # print("one actor in the front", self.danger_actor)
 
         # here check the end situation
         if len(self.collision_history) != 0:
@@ -838,6 +909,14 @@ class CarlaSimulation(DrivingSimulation):
         rv = speed_reward(ego_speed, self.speed_limit, 5)
         rp = pathfollowing_reward(current_state=self.get_state(), current_route=self.trace_route(), ego_car_location=ego_location)
         reward = np.array([rp, rv])
+
+        ##########################################################
+        ##collision rewared test
+        if self.danger_actor is None:
+            rc = 0
+        else:
+            danger_location = [self.danger_actor.get_location().x, self.danger_actor.get_location().y]
+            rc = collision_avoidence_reward(danger_location, ego_location, ego_speed)
         ############################################################
         # Run simulation for one timestep
         self.tick()

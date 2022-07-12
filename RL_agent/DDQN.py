@@ -96,9 +96,6 @@ class DDQN(object):
         state = torch.unsqueeze(torch.tensor(state), dim=0)
         action_value = self.policy_net.forward(state)
 
-
-
-
     def select_action(self, state):
         state = torch.unsqueeze(torch.tensor(state), dim=0)
         p = np.random.random()
@@ -110,7 +107,22 @@ class DDQN(object):
                        math.exp(-1. * self.learn_step / EPS_DECAY)
         if self.test_mode:
             actions_value = self.policy_net.forward(state)
-            return torch.max(actions_value, 1)[1].data.cpu().numpy()[0]
+            q = actions_value.data.cpu().numpy()[0]
+            max_action = torch.max(actions_value, 1)[1].data.cpu().numpy()[0]
+            max_q = q[max_action]
+            if self.agent_name == 'path':
+                th = 0.8
+            else:
+                th = 0.9
+            prefered_actions = []
+            for i in range(len(q)):
+                if q[i] >= th * max_q:
+                    prefered_actions.append(i)
+            if prefered_actions != []:
+                final_action = random.choice(prefered_actions)
+            else:
+                final_action = max_action
+            return max_action
         else:
             if p > E_thresh:
                 actions_value = self.policy_net.forward(state)

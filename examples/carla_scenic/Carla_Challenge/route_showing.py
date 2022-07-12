@@ -2,15 +2,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 from scipy.optimize import curve_fit
-episodes = random.randint(2000, 2420)
+episodes = random.randint(0, 100)
 
 # def func(x, a, b, c):
 #     return a + b * x + c * x ** 2
 #
-reference_route = np.load('./log_01/reference_route' + str(episodes) + '.npy')
-print(reference_route.shape)
-driving_trajectory = np.load('./log_01/vehicle_trajectory'+str(episodes) +'.npy')
-# vehicle_speed = np.load('./log_01/vehicle_speed' + str(episodes) + '.npy')
+# reference_route = np.load('./log_01/reference_route' + str(episodes) + '.npy')
+# print(reference_route.shape)
+# driving_trajectory = np.load('./log_01/vehicle_trajectory'+str(episodes) +'.npy')
+vehicle_speed = np.load('./log_01/vehicle_speed' + str(episodes) + '.npy')
+x = range(0, len(vehicle_speed))
 # para2 = np.polyfit(current_route[:, 0], current_route[:, 1], 3 )
 # p = np.poly1d(para2)
 # x = np.linspace(start=current_route[0, 0], stop=current_route[-1, 0], num=100)
@@ -18,10 +19,12 @@ driving_trajectory = np.load('./log_01/vehicle_trajectory'+str(episodes) +'.npy'
 
 # plt.plot(reference_route[:,0], reference_route[:,1])
 # plt.plot(driving_trajectory[:,0], driving_trajectory[:,1])
-plt.plot(reference_route[:,0], reference_route[:,1])
-plt.title(r'$\alpha_i > \beta_i$', fontsize=20)
-plt.text(1, -0.6, r'$\sum_{i=0}^\infty x_i$', fontsize=20)
-plt.show()
+plt.plot(x, vehicle_speed)
+plt.xlabel('step')
+plt.ylabel('speed [km/h]')
+# plt.title(r'$\alpha_i > \beta_i$', fontsize=20)
+# plt.text(1, -0.6, r'$\sum_{i=0}^\infty x_i$', fontsize=20)
+# plt.show()
 # plt.plot(np.array([i for i in range(len(vehicle_speed))]), vehicle_speed)
 plt.show()
 # for i in range(2):
