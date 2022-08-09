@@ -132,6 +132,12 @@ class CarlaSimulation(DrivingSimulation):
         self.detect_range = self.speed_limit / 1.8
         # this attribute define the distance between the waypoint
         self.sample_resolution = 2.0
+        #predefined throttle actions
+        self.throttle_actions = [1.0, 0.5, 0, -0.5, -1.0]
+        #predefned steer actions
+        self.steer_actions = [-0.1, -0.05, 0, 0.05, 0.1]
+        #combined action table for further action selection
+        self.action_table = self.get_actions()
         ##################
         if render_hud:
             # preparation of the HUD surface
@@ -315,6 +321,13 @@ class CarlaSimulation(DrivingSimulation):
         elif angle_diff >= 180:
             angle_diff -= 360
         return angle_diff
+    def get_actions(self):
+        new_action_set1, new_action_set2 = np.meshgrid(self.throttle_actions, self.steer_actions)
+        new_action_set1 = new_action_set1.reshape((1, -1))[0]
+        new_action_set2 = new_action_set2.reshape((1, -1))[0]
+        combined_actions = np.vstack((new_action_set1, new_action_set2))
+        return combined_actions
+
 
 
     def get_state(self):
@@ -834,42 +847,17 @@ class CarlaSimulation(DrivingSimulation):
         # defination of different actions
         ## collision action
         # steer action
-        if actions[1] == 0:
-            self.ego_steer -= 0.1
-            self.ego_steer_action = -0.1
-        elif actions[1] == 1:
-            self.ego_steer -= 0.05
-            self.ego_steer_action = -0.05
-        elif actions[1] == 2:
-            pass
-            self.ego_steer_action = 0
-        elif actions[1] == 3:
-            self.ego_steer += 0.05
-            self.ego_steer_action = 0.05
-        elif actions[1] == 4:
-           self.ego_steer += 0.1
-           self.ego_steer_action = 0.1
-
-        if actions[2] == 0:
-            throttle = 1.0
-            self.ego_throttle_action = 1.0
-            brake = 0.0
-        elif actions[2] == 1:
-            throttle = 0.5
-            brake = 0.0
-            self.ego_throttle_action = 0.5
-        elif actions[2] == 2:
-            throttle = 0.0
-            self.ego_throttle_action = 0
-            brake = 0.0
-        elif actions[2] == 3:
-            throttle = 0.0
-            brake = 0.5
-            self.ego_throttle_action = -0.5
-        elif actions[2] == 4:
-            throttle = 0.0
-            brake = 1.0
-            self.ego_throttle_action = -1.0
+        action_num = actions[0]
+        selected_action = self.action_table[:, action_num]
+        throttle_value = selected_action[0]
+        steer_value = selected_action[1]
+        if throttle_value >= 0:
+            throttle = throttle_value
+            brake = 0
+        else:
+            throttle = 0
+            brake = abs(throttle_value)
+        self.ego_steer += steer_value
         # limit the range of steer angle
         if self.ego_steer < 0:
             self.ego_steer = max(-0.8, self.ego_steer)
@@ -884,7 +872,7 @@ class CarlaSimulation(DrivingSimulation):
         # else:
         #     throttle = 0.0
         #     brake = min(abs(acceleration), 0.3)
-        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=self.ego_steer, throttle=throttle, brake=brake))
+        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=0, throttle=throttle, brake=brake))
         # the env information
         ego_location = [self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y]
         ego_speed = [self.ego.carlaActor.get_velocity().x, self.ego.carlaActor.get_velocity().y]
@@ -915,7 +903,7 @@ class CarlaSimulation(DrivingSimulation):
         #### collisioin reward
         collision_state = self.get_state()[1]
         rc = collision_avoidence_reward(relative_location=[collision_state[0], collision_state[1]], ego_car_speed=ego_speed, action = actions[0])
-        reward = np.array([rc, rp, rv])
+        reward = np.array([rv, rp, rc])
         ############################################################
         # Run simulation for one timestep
         self.tick()

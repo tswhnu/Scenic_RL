@@ -95,6 +95,7 @@ class DDQN(object):
     def MO_action_selection(self, pre_action, state):
         if pre_action == 0:
             action = self.select_action(state)
+        # if there have dangerous situation, the speed agent can only select action from certain range
         else:
             action_value = self.action_value(state).data.cpu().numpy()[0]
             action = np.argmax(action_value[-2:]) + 3

@@ -13,13 +13,8 @@ def speed_reward(ego_car_speed, speed_limit, tolerance=5):
     """
     vehicle_vel = math.sqrt(ego_car_speed[0] ** 2 + ego_car_speed[1] ** 2)
     current_speed = 3.6 * vehicle_vel
-    # the vehicle will gain a positive value if didn't exceed the speed limit
-    if current_speed <= speed_limit:
-        reward = -current_speed * (current_speed - 2 * speed_limit) / speed_limit ** 2
-    elif current_speed <= 0:
-        reward = -1
-    else:
-        reward = -current_speed / (speed_limit + tolerance)
+    # the reward will only be positive if the speed is in a certain range
+    reward = -(1 / tolerance ** 2) * (current_speed - speed_limit) ** 2 + 1
     return reward
 
 def pathfollowing_reward(current_state = None, current_route = None, ego_car_location = None):
