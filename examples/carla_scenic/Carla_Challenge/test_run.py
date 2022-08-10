@@ -46,12 +46,13 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                                        model='scenic.simulators.carla.model')
     simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
 
-    threshold_list = np.array([3, 2])
+    threshold_list = np.array([3, 3])
     TH_start = 0.8
     TH_end = 0.15
     TH_decay = 200
     reward_list = []
     simulation = None
+    initial_action_set = np.arange(n_action)
 
     try:
         if render_hud:
@@ -88,8 +89,8 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             dynamicScenario = simulation.scene.dynamicScenario
             ##########################################################
             start_time = time.time()
-            epi_reward = np.array([0.0,0.0,0.0])
-            totoal_reward = np.array([0.0,0.0,0.0])
+            epi_reward = np.array([0.0,0.0])
+            totoal_reward = np.array([0.0,0.0])
             route = []
             #########################################################
 
@@ -145,20 +146,16 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     simulation.executeActions(allActions)
 
                     ####################################################################
-                    if len(RL_agents_list) > 1:
-                        action_seq = []
-                        for i in range(len(RL_agents_list)):
-                            # collsion can path following agent can seclect action from what they want
-                            action_value = RL_agents_list[i].action_value(state_list[i])
-                            action = RL_agents_list[i].select_action(state_list[i])
-                            action_seq.append(action)
-                    else:
-                        action = RL_agents_list[0].select_action(state_list[0])
-                        action_seq = [action]
+                    Q_list = []
+                    for i in range(len(RL_agents_list)):
+                        # collsion can path following agent can seclect action from what they want
+                        action_value = RL_agents_list[i].action_value(state_list[i])
+                        Q_list.append(action_value)
+                    action_seq = action_selection(Q_list, threshold_list, initial_action_set, episode, test_list=test_list)
+                    final_action = action_seq[-1]
                     # Run the simulation for a single step and read its state back into Scenic
                     new_state, reward, done, _ = simulation.step(
-                        actions=action_seq,
-                        last_position=last_position)  # here need to notice that the reward value here will be a list
+                        action=final_action)  # here need to notice that the reward value here will be a list
                     new_state_list = [new_state[0][-2:], new_state[0], new_state[1]]
                     # here we got tge cumulative reward of the current episode
                     epi_reward += reward
@@ -245,12 +242,18 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
 n_action = 25
 # n_state_list = [7, 2]
 # agent_name_list = ['path', 'speed']
+# n_state_list = [2, 8]
+# test_list = [True, False]
+# load_model = [True, False]
+# save_model = [False, True]
+# step_list = [600, 0]
+# agent_name_list = ['speed', 'path_following']
 n_state_list = [2, 8]
 test_list = [True, False]
 load_model = [True, False]
 save_model = [False, True]
-step_list = [600, 0]
-agent_name_list = ['speed', 'path_following']
+step_list = [800, 0]
+agent_name_list = ['speed', 'path']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=load_model, current_step=step_list, test_mode=test_list)
 train(episodes=1000, RL_agents_list=RL_agents_list, current_episodes=0,

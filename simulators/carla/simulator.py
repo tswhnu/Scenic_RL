@@ -843,12 +843,12 @@ class CarlaSimulation(DrivingSimulation):
                     obj.carlaActor.apply_control(ctrl)
                     obj._control = None
 
-    def step(self, actions, last_position):
+    def step(self, action):
         # defination of different actions
         ## collision action
         # steer action
-        action_num = actions[0]
-        selected_action = self.action_table[:, action_num]
+
+        selected_action = self.action_table[:, action]
         throttle_value = selected_action[0]
         steer_value = selected_action[1]
         if throttle_value >= 0:
@@ -872,7 +872,7 @@ class CarlaSimulation(DrivingSimulation):
         # else:
         #     throttle = 0.0
         #     brake = min(abs(acceleration), 0.3)
-        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=0, throttle=throttle, brake=brake))
+        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=self.ego_steer, throttle=throttle, brake=brake))
         # the env information
         ego_location = [self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y]
         ego_speed = [self.ego.carlaActor.get_velocity().x, self.ego.carlaActor.get_velocity().y]
@@ -902,8 +902,8 @@ class CarlaSimulation(DrivingSimulation):
         rp = pathfollowing_reward(current_state=self.get_state()[0], current_route=self.trace_route(), ego_car_location=ego_location)
         #### collisioin reward
         collision_state = self.get_state()[1]
-        rc = collision_avoidence_reward(relative_location=[collision_state[0], collision_state[1]], ego_car_speed=ego_speed, action = actions[0])
-        reward = np.array([rv, rp, rc])
+        # rc = collision_avoidence_reward(relative_location=[collision_state[0], collision_state[1]], ego_car_speed=ego_speed, action = actions[0])
+        reward = np.array([rv, rp])
         ############################################################
         # Run simulation for one timestep
         self.tick()

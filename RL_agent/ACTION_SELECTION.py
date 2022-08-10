@@ -1,13 +1,16 @@
+import random
+
 import numpy as np
 import math
 
-EPS_DECAY = 200
+EPS_DECAY = 1000
 EPS_START = 0.9
 EPS_END = 0.05
 
 
-def action_selection(q_list, threshold_list, action_set, current_eps):
+def action_selection(q_list, threshold_list, action_set, current_eps, test_list):
     action_seq = []
+
     E_thresh = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * current_eps / EPS_DECAY)
     # first check the length of the Q_list and threshold_list
     if len(q_list) != len(threshold_list):
@@ -22,17 +25,20 @@ def action_selection(q_list, threshold_list, action_set, current_eps):
             else:
                 p = np.random.random()
                 # for each agent, there has possibility that this agent will choose random action from Ai-1
-                if p > E_thresh:
+                if test_list[i]:
+                    E_thresh = EPS_END
+                if p > E_thresh or test_list[i]:
                     current_q = q_list[i].data.cpu().numpy()[0]
                     threshold = threshold_list[i]
                     # find the max action and max action value
                     max_action = np.argmax(current_q)
                     max_action_value = current_q[max_action]
-                    action_seq.append(max_action)
                     # here we extend the acceptable action value range
                     low_bound = max_action_value - threshold
                     action_value_set = current_q[action_set]
                     new_action_set = action_set[action_value_set >= low_bound]
+                    # new_action = random.choice(new_action_set)
+                    action_seq.append(max_action)
                     if len(new_action_set) == 0:
                         action_set = np.array([max_action])
                     else:
