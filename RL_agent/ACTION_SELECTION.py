@@ -27,23 +27,30 @@ def action_selection(q_list, threshold_list, action_set, current_eps, test_list)
                 # for each agent, there has possibility that this agent will choose random action from Ai-1
                 if test_list[i]:
                     E_thresh = EPS_END
-                if p > E_thresh or test_list[i]:
+                if p > E_thresh:
+                    #the agent will choose action based on the q value
                     current_q = q_list[i].data.cpu().numpy()[0]
+                    # the threshold value will decide the range of action set
                     threshold = threshold_list[i]
-                    # find the max action and max action value
-                    max_action = np.argmax(current_q)
-                    max_action_value = current_q[max_action]
-                    # here we extend the acceptable action value range
-                    low_bound = max_action_value - threshold
+                    # here we first get the value of actions in the action set
                     action_value_set = current_q[action_set]
+                    # find the max action value in the action value set
+                    max_action_value = np.max(action_value_set)
+                    # here is the max action which have biggest action value
+                    max_action_inset = action_set[np.argmax(action_value_set)]
+                    # the low-bound calculate from the threshold
+                    low_bound = max_action_value - threshold
+                    # find all the actions that the action value is above this low-bound
                     new_action_set = action_set[action_value_set >= low_bound]
-                    # new_action = random.choice(new_action_set)
-                    action_seq.append(max_action)
+                    # the new action for this objective is random choose from new action set since all of them are considered equally good
+                    new_action = random.choice(new_action_set)
+                    action_seq.append(new_action)
                     if len(new_action_set) == 0:
-                        action_set = np.array([max_action])
+                        action_set = np.array([new_action])
                     else:
                         action_set = new_action_set
                 else:
+                    # the agent will explor on current action set
                     action = np.random.choice(action_set)
                     action_set = np.array([action])
                     action_seq.append(action)

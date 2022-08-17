@@ -161,7 +161,8 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     epi_reward += reward
 
                     for i in range(len(RL_agents_list)):
-                        RL_agents_list[i].store_transition(state_list[i], action_seq[i], reward[i], new_state_list[i], done)
+                        # there need to notice that all the objectives need to store same action
+                        RL_agents_list[i].store_transition(state_list[i], final_action, reward[i], new_state_list[i], done)
                     # RL_path.store_transition(state_list[0], action_seq[0], reward_list[0], new_state, done)
                     # RL_speed.store_transition(state_list[1], action_seq[1], reward_list[1], new_state[-2:], done)
                     # update the state velue
@@ -175,7 +176,6 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                         totoal_reward += epi_reward /simulation.currentTime
                         reward_list.append(epi_reward / simulation.currentTime)
                         reward_array = np.array(reward_list)
-
                         break
 
                     simulation.updateObjects()
@@ -249,10 +249,10 @@ n_action = 25
 # step_list = [600, 0]
 # agent_name_list = ['speed', 'path_following']
 n_state_list = [2, 8]
-test_list = [True, False]
-load_model = [True, False]
-save_model = [False, True]
-step_list = [800, 0]
+test_list = [False, False]
+load_model = [False, False]
+save_model = [False, False]
+step_list = [0, 0]
 agent_name_list = ['speed', 'path']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=load_model, current_step=step_list, test_mode=test_list)
