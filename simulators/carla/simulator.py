@@ -132,6 +132,9 @@ class CarlaSimulation(DrivingSimulation):
         self.detect_range = self.speed_limit / 1.8
         # this attribute define the distance between the waypoint
         self.sample_resolution = 2.0
+        self.throttle_action_set = [1.0, 0.5, 0, -0.5, -1.0]
+        self.steer_action_set = [-0.1, -0.05, 0, 0.05, 0.1]
+        self.action_table = np.stack(np.meshgrid(self.throttle_action_set, self.steer_action_set), axis=2).reshape(-1, 2)
         ##################
         if render_hud:
             # preparation of the HUD surface
@@ -370,7 +373,7 @@ class CarlaSimulation(DrivingSimulation):
         # danger_vel = danger_vel * 3.6
         # relative_speed = danger_vel
 
-        state2 = [relative_location[0], relative_location[1], vehicle_vel]
+        state2 = [float(relative_location[0]), float(relative_location[1]), float(vehicle_vel)]
         return [state1, state2]
 
         # return np.append(trace, [ego_location, ego_speed]).astype(np.single)
@@ -830,47 +833,56 @@ class CarlaSimulation(DrivingSimulation):
                     obj.carlaActor.apply_control(ctrl)
                     obj._control = None
 
-    def step(self, actions, last_position):
+    def step(self, action, last_position, threshold_list):
         # defination of different actions
         ## collision action
         # steer action
-        if actions[1] == 0:
-            self.ego_steer -= 0.1
-            self.ego_steer_action = -0.1
-        elif actions[1] == 1:
-            self.ego_steer -= 0.05
-            self.ego_steer_action = -0.05
-        elif actions[1] == 2:
-            pass
-            self.ego_steer_action = 0
-        elif actions[1] == 3:
-            self.ego_steer += 0.05
-            self.ego_steer_action = 0.05
-        elif actions[1] == 4:
-           self.ego_steer += 0.1
-           self.ego_steer_action = 0.1
-
-        if actions[2] == 0:
-            throttle = 1.0
-            self.ego_throttle_action = 1.0
-            brake = 0.0
-        elif actions[2] == 1:
-            throttle = 0.5
-            brake = 0.0
-            self.ego_throttle_action = 0.5
-        elif actions[2] == 2:
-            throttle = 0.0
-            self.ego_throttle_action = 0
-            brake = 0.0
-        elif actions[2] == 3:
-            throttle = 0.0
-            brake = 0.5
-            self.ego_throttle_action = -0.5
-        elif actions[2] == 4:
-            throttle = 0.0
-            brake = 1.0
-            self.ego_throttle_action = -1.0
+        throttle_action = self.action_table[action, 0]
+        steer_action = self.action_table[action, 1]
+        # if action[0] == 0:
+        #     self.ego_steer -= 0.1
+        #     self.ego_steer_action = -0.1
+        # elif action[0] == 1:
+        #     self.ego_steer -= 0.05
+        #     self.ego_steer_action = -0.05
+        # elif action[0] == 2:
+        #     pass
+        #     self.ego_steer_action = 0
+        # elif action[0] == 3:
+        #     self.ego_steer += 0.05
+        #     self.ego_steer_action = 0.05
+        # elif action[0] == 4:
+        #    self.ego_steer += 0.1
+        #    self.ego_steer_action = 0.1
+        #
+        # if action[1] == 0:
+        #     throttle = 1.0
+        #     self.ego_throttle_action = 1.0
+        #     brake = 0.0
+        # elif action[1] == 1:
+        #     throttle = 0.5
+        #     brake = 0.0
+        #     self.ego_throttle_action = 0.5
+        # elif action[1] == 2:
+        #     throttle = 0.0
+        #     self.ego_throttle_action = 0
+        #     brake = 0.0
+        # elif action[1] == 3:
+        #     throttle = 0.0
+        #     brake = 0.5
+        #     self.ego_throttle_action = -0.5
+        # elif action[1] == 4:
+        #     throttle = 0.0
+        #     brake = 1.0
+        #     self.ego_throttle_action = -1.0
         # limit the range of steer angle
+        if throttle_action >= 0:
+            throttle = throttle_action
+            brake = 0
+        else:
+            brake = -throttle_action
+            throttle = 0
+        self.ego_steer += steer_action
         if self.ego_steer < 0:
             self.ego_steer = max(-0.8, self.ego_steer)
         else:
@@ -914,8 +926,8 @@ class CarlaSimulation(DrivingSimulation):
         rp = pathfollowing_reward(current_state=self.get_state()[0], current_route=self.trace_route(), ego_car_location=ego_location)
         #### collisioin reward
         collision_state = self.get_state()[1]
-        rc = collision_avoidence_reward(relative_location=[collision_state[0], collision_state[1]], ego_car_speed=ego_speed, action = actions[0])
-        reward = np.array([rc, rp, rv])
+        rc = collision_avoidence_reward(relative_location=[collision_state[0], collision_state[1]], ego_car_speed=ego_speed)
+        reward = np.array([rp * 0.3 + rv * 0.7])
         ############################################################
         # Run simulation for one timestep
         self.tick()

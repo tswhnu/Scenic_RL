@@ -46,12 +46,13 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                                        model='scenic.simulators.carla.model')
     simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
 
-    threshold_list = np.array([3, 2])
+    threshold_list = np.array([0.5, 0.8])
     TH_start = 0.8
     TH_end = 0.15
     TH_decay = 200
     reward_list = []
     simulation = None
+    initial_action_set = np.arange(5)
 
     try:
         if render_hud:
@@ -92,7 +93,6 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             totoal_reward = np.zeros(len(RL_agents_list))
             route = []
             #########################################################
-
             try:
                 # Initialize dynamic scenario
                 dynamicScenario._start()
@@ -105,7 +105,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 initial_state= simulation.get_state()
                 initial_ego_position = np.array([simulation.ego.carlaActor.get_location().x,
                                                  simulation.ego.carlaActor.get_location().y])
-                state_list = [initial_state[1], initial_state[0], initial_state[0][-2:]]
+                state_list = [initial_state[0], initial_state[0][-2:], initial_state[1]]
                 last_position = initial_ego_position
                 ###################################################################################
                 # Run simulation
@@ -147,25 +147,46 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     ####################################################################
                     if len(RL_agents_list) > 1:
                         action_seq = []
+                        valid_action_set = []
                         for i in range(len(RL_agents_list)):
                             if i == 0 or i == 1:
                                 action = RL_agents_list[i].select_action(state_list[i])
+
+                                action_value = RL_agents_list[i].action_value(state_list[i])
+                                action_value = action_value.data.cpu().numpy()[0]
+                                max_action_value = action_value[action]
+                                low_bound = max_action_value - threshold_list[i]
+                                valid_action_set.append(initial_action_set[action_value >= low_bound])
+                                action_seq.append(action)
                             else:
-                                action = RL_agents_list[i].MO_action_selection(action_seq[0], state_list[i])
-                            action_seq.append(action)
+                                combined_actions = np.stack(np.meshgrid(valid_action_set[0], valid_action_set[1]), axis=2).reshape(-1, 2)
+                                initial_action_value = RL_agents_list[i].action_value(state_list[i]).data.cpu().numpy()[0]
+                                action_value_matrix = initial_action_value.reshape(5, 5)
+                                selected_action_value = []
+                                for i in combined_actions:
+                                    selected_action_value.append(action_value_matrix[i[0], i[1]])
+                                    max_action_value = np.max(selected_action_value)
+                                    max_action = np.where(initial_action_value == max_action_value)
+                                    final_action = np.where(action_value_matrix == max_action_value)
+                                    final_action = [final_action[0], final_action[1]]
+                                    action_seq.append(max_action)
                     else:
                         action = RL_agents_list[0].select_action(state_list[0])
+                        final_action = action
                         action_seq = [action]
                     # Run the simulation for a single step and read its state back into Scenic
                     new_state, reward, done, _ = simulation.step(
-                        actions=action_seq,
-                        last_position=last_position)  # here need to notice that the reward value here will be a list
-                    new_state_list = [new_state[1], new_state[0], new_state[0][-2:]]
+                        action = final_action,
+                        last_position=last_position, threshold_list=threshold_list)  # here need to notice that the reward value here will be a list
+                    new_state_list = [new_state[0], new_state[0][-2:], new_state[1]]
                     # here we got tge cumulative reward of the current episode
                     epi_reward += reward
 
                     for i in range(len(RL_agents_list)):
-                        RL_agents_list[i].store_transition(state_list[i], action_seq[i], reward[i], new_state_list[i], done)
+                        if test_list[i]:
+                            pass
+                        else:
+                            RL_agents_list[i].store_transition(state_list[i], action_seq[i], reward[i], new_state_list[i], done)
                     # RL_path.store_transition(state_list[0], action_seq[0], reward_list[0], new_state, done)
                     # RL_speed.store_transition(state_list[1], action_seq[1], reward_list[1], new_state[-2:], done)
                     # update the state velue
@@ -243,19 +264,19 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
         else:
             pass
 
-n_action_list = [2, 5, 5]
+n_action_list = [25]
 # n_state_list = [7, 2]
 # agent_name_list = ['path', 'speed']
-n_state_list = [3, 8, 2]
-test_list = [False, True, True]
-load_model = [False, True, True]
-save_model = [True, False, False]
-step_list = [0, 2300, 2300]
-agent_name_list = ['collision', 'path', 'speed']
+n_state_list = [8]
+test_list = [False]
+load_model = [False]
+save_model = [True]
+step_list = [900]
+agent_name_list = ['scalar']
 RL_agents_list = creat_agents(n_action=n_action_list, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=load_model, current_step=step_list, test_mode=test_list)
-train(episodes=1000, RL_agents_list=RL_agents_list, current_episodes=0,
-      maxSteps=1000, n_state_list=n_state_list, traffic_generation=True, save_model=save_model, test_list=test_list,
+train(episodes=1500, RL_agents_list=RL_agents_list, current_episodes=1000,
+      maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=save_model, test_list=test_list,
       render_hud=False, save_log=False)
 
 # simulation.run(maxSteps=None)
