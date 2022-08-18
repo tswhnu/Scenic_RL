@@ -3,7 +3,7 @@ import random
 import numpy as np
 import math
 
-EPS_DECAY = 1000
+EPS_DECAY = 20
 EPS_START = 0.9
 EPS_END = 0.05
 
