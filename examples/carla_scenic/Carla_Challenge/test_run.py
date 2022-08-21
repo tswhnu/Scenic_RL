@@ -268,14 +268,14 @@ n_action_list = [25]
 # n_state_list = [7, 2]
 # agent_name_list = ['path', 'speed']
 n_state_list = [8]
-test_list = [False]
-load_model = [False]
-save_model = [True]
-step_list = [900]
+test_list = [True]
+load_model = [True]
+save_model = [False]
+step_list = [1300]
 agent_name_list = ['scalar']
 RL_agents_list = creat_agents(n_action=n_action_list, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=load_model, current_step=step_list, test_mode=test_list)
-train(episodes=1500, RL_agents_list=RL_agents_list, current_episodes=1000,
+train(episodes=1500, RL_agents_list=RL_agents_list, current_episodes=0,
       maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=save_model, test_list=test_list,
       render_hud=False, save_log=False)
 
