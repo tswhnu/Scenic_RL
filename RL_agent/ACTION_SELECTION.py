@@ -8,7 +8,8 @@ EPS_END = 0.05
 
 def action_selection(q_list, threshold_list, action_set, current_eps):
     action_seq = []
-    E_thresh = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * current_eps / EPS_DECAY)
+    # E_thresh = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * current_eps / EPS_DECAY)
+    E_thresh = 0
     # first check the length of the Q_list and threshold_list
     if len(q_list) != len(threshold_list):
         print("the length of the Q-list must same with the length of threshold_list")
@@ -24,6 +25,15 @@ def action_selection(q_list, threshold_list, action_set, current_eps):
                 # for each agent, there has possibility that this agent will choose random action from Ai-1
                 if p > E_thresh:
                     current_q = q_list[i].data.cpu().numpy()[0]
+                    q_table = current_q.reshape(5, 5)
+                    if current_eps % 5 == 0:
+                        avg_list = []
+                        for j in range(q_table.shape[0]):
+                            q_table_colum = q_table[:, j]
+                            avg = np.average(q_table_colum)
+                            avg_list.append(avg)
+                        print(avg_list)
+
                     threshold = threshold_list[i]
                     # find the max action and max action value
                     max_action = np.argmax(current_q)
@@ -33,6 +43,7 @@ def action_selection(q_list, threshold_list, action_set, current_eps):
                     low_bound = max_action_value - threshold
                     action_value_set = current_q[action_set]
                     new_action_set = action_set[action_value_set >= low_bound]
+                    new_value_set = current_q[new_action_set]
                     if len(new_action_set) == 0:
                         action_set = np.array([max_action])
                     else:
@@ -41,7 +52,7 @@ def action_selection(q_list, threshold_list, action_set, current_eps):
                     action = np.random.choice(action_set)
                     action_set = np.array([action])
                     action_seq.append(action)
-        return action_seq
+        return new_action_set, current_q
 # a = np.array([0, 1, 3])
 # while True:
 #     action = np.random.choice(a)
