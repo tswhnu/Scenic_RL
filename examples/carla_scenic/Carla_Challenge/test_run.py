@@ -105,7 +105,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 initial_state= simulation.get_state()
                 initial_ego_position = np.array([simulation.ego.carlaActor.get_location().x,
                                                  simulation.ego.carlaActor.get_location().y])
-                state_list = [initial_state[0], initial_state[0][-2:], initial_state[1]]
+                state_list = [initial_state[0][-4:], initial_state[1]]
                 last_position = initial_ego_position
                 ###################################################################################
                 # Run simulation
@@ -171,14 +171,17 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                                     final_action = [final_action[0], final_action[1]]
                                     action_seq.append(max_action)
                     else:
+                        q_value = RL_agents_list[0].action_value(state_list[0])
+                        new_action_set, value_set = action_selection([q_value], [0.2], np.arange(25), episode)
                         action = RL_agents_list[0].select_action(state_list[0])
+                        # print(state_list[0], new_action_set, action, value_set)
                         final_action = action
                         action_seq = [action]
                     # Run the simulation for a single step and read its state back into Scenic
                     new_state, reward, done, _ = simulation.step(
                         action = final_action,
                         last_position=last_position, threshold_list=threshold_list)  # here need to notice that the reward value here will be a list
-                    new_state_list = [new_state[0], new_state[0][-2:], new_state[1]]
+                    new_state_list = [new_state[0][-4:], new_state[1]]
                     # here we got tge cumulative reward of the current episode
                     epi_reward += reward
 
@@ -193,7 +196,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     state_list = new_state_list
                     if RL_agents_list[0].memory_counter > MEMORY_CAPACITY:
                         for i, RL_agent in enumerate(RL_agents_list):
-                            if test_list is not True:
+                            if test_list[i] is not True:
                                 RL_agent.optimize_model()
                     if done:
                         print("reward_info: ", epi_reward / simulation.currentTime)
@@ -264,14 +267,15 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
         else:
             pass
 
+
 n_action_list = [25]
 # n_state_list = [7, 2]
 # agent_name_list = ['path', 'speed']
-n_state_list = [8]
+n_state_list = [4]
 test_list = [True]
 load_model = [True]
 save_model = [False]
-step_list = [1300]
+step_list = [800]
 agent_name_list = ['scalar']
 RL_agents_list = creat_agents(n_action=n_action_list, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=load_model, current_step=step_list, test_mode=test_list)
@@ -283,3 +287,4 @@ train(episodes=1500, RL_agents_list=RL_agents_list, current_episodes=0,
 #         result = simulation.trajectory
 #         for i, state in enumerate(result):
 #                 egoPos = state
+
