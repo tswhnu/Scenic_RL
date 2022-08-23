@@ -169,7 +169,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     state_list = new_state_list
                     if RL_agents_list[0].memory_counter > MEMORY_CAPACITY:
                         for i, RL_agent in enumerate(RL_agents_list):
-                            if test_list is not True:
+                            if test_list[i] is not True:
                                 RL_agent.optimize_model()
                     if done:
                         print("reward_info: ", epi_reward / simulation.currentTime)
