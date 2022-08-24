@@ -138,6 +138,7 @@ class CarlaSimulation(DrivingSimulation):
         self.steer_actions = [-0.1, -0.05, 0, 0.05, 0.1]
         #combined action table for further action selection
         self.action_table = self.get_actions()
+        self.speed_hist = 0
         ##################
         if render_hud:
             # preparation of the HUD surface
@@ -365,9 +366,11 @@ class CarlaSimulation(DrivingSimulation):
         angle_diff1 = self.angle_diff(angle1)
         angle_diff2 = self.angle_diff(angle2)
 
-
-        state1 = np.array([route_distance, distance1, distance2, angle_diff1, angle_diff2,
-                          self.ego_steer, current_speed, self.speed_limit]).astype(np.single)
+        # gte the vehicle control state for speed control
+        current_throttle = self.ego.carlaActor.get_control().throttle
+        current_brake = self.ego.carlaActor.get_control().brake
+        last_speed = self.speed_hist
+        self.speed_hist = current_speed
 
         ## state information for collision avoidence agent
         if self.danger_actor is None:
@@ -382,9 +385,13 @@ class CarlaSimulation(DrivingSimulation):
         # danger_vel = math.sqrt(danger_speed[0] ** 2 + danger_speed[1] ** 2)
         # danger_vel = danger_vel * 3.6
         # relative_speed = danger_vel
+        state_path = np.array([route_distance, distance1, distance2, angle_diff1, angle_diff2,
+                           self.ego_steer, last_speed, current_speed]).astype(np.single)
+        state_speed = state_collision = np.array([last_speed, current_speed,
+                                                  current_throttle, current_brake]).astype(np.single)
 
-        state2 = [relative_location[0], relative_location[1], vehicle_vel]
-        return [state1, state2]
+        state_collsion = [relative_location[0], relative_location[1], vehicle_vel]
+        return [state_speed, state_path, state_collsion]
 
         # return np.append(trace, [ego_location, ego_speed]).astype(np.single)
 
@@ -898,10 +905,10 @@ class CarlaSimulation(DrivingSimulation):
             done = True
         else:
             done = False
-        rv = speed_reward(ego_speed, self.speed_limit, 5)
-        rp = pathfollowing_reward(current_state=self.get_state()[0], current_route=self.trace_route(), ego_car_location=ego_location)
+        rv = speed_reward(ego_speed, 5)
+        rp = pathfollowing_reward(current_state=self.get_state()[1], current_route=self.trace_route(), ego_car_location=ego_location)
         #### collisioin reward
-        collision_state = self.get_state()[1]
+        # collision_state = self.get_state()[2]
         # rc = collision_avoidence_reward(relative_location=[collision_state[0], collision_state[1]], ego_car_speed=ego_speed, action = actions[0])
         reward = np.array([rv, rp])
         ############################################################

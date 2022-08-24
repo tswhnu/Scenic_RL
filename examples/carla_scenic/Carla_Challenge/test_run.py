@@ -46,7 +46,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                                        model='scenic.simulators.carla.model')
     simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
 
-    threshold_list = np.array([3, 3])
+    threshold_list = np.array([0.2, 0.2])
     TH_start = 0.8
     TH_end = 0.15
     TH_decay = 200
@@ -106,7 +106,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 initial_state= simulation.get_state()
                 initial_ego_position = np.array([simulation.ego.carlaActor.get_location().x,
                                                  simulation.ego.carlaActor.get_location().y])
-                state_list = [initial_state[0][-2:], initial_state[0],  initial_state[1]]
+                state_list = [initial_state[0], initial_state[1],  initial_state[2]]
                 last_position = initial_ego_position
                 ###################################################################################
                 # Run simulation
@@ -156,7 +156,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     # Run the simulation for a single step and read its state back into Scenic
                     new_state, reward, done, _ = simulation.step(
                         action=final_action)  # here need to notice that the reward value here will be a list
-                    new_state_list = [new_state[0][-2:], new_state[0], new_state[1]]
+                    new_state_list = [new_state[0], new_state[1], new_state[2]]
                     # here we got tge cumulative reward of the current episode
                     epi_reward += reward
 
@@ -248,7 +248,7 @@ n_action = 25
 # save_model = [False, True]
 # step_list = [600, 0]
 # agent_name_list = ['speed', 'path_following']
-n_state_list = [2, 8]
+n_state_list = [4, 8]
 test_list = [False, False]
 load_model = [False, False]
 save_model = [False, False]

@@ -22,7 +22,7 @@ MEMORY_CAPACITY = 4000  # the capacity of the memory
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # the structure of the network
 
-EPS_START = 0.9
+EPS_START = 0.99
 EPS_END = 0.05
 EPS_DECAY = 20
 

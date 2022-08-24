@@ -4,23 +4,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def speed_reward(ego_car_speed, speed_limit, tolerance=5):
+def speed_reward(ego_car_speed, tolerance=5):
     """
-
     :param ego_car_speed: the current speed of the ego vehicle
-    :param speed_limit: the speed limit for current scenario
     :param tolerance: the acceptable range for the speed limit
     """
     vehicle_vel = math.sqrt(ego_car_speed[0] ** 2 + ego_car_speed[1] ** 2)
     current_speed = 3.6 * vehicle_vel
-    if speed_limit == 0:
-        # the reward will only be positive if the speed is in a certain range
-        reward = -(1 / tolerance ** 2) * (current_speed - speed_limit) ** 2 + 1
+    if current_speed >= 20 and current_speed <= 35:
+        reward = 1
+    elif current_speed < 20:
+        reward = current_speed / 10 - 1
     else:
-        if current_speed <= speed_limit:
-            reward = 1.3 + (-1 - 1.3) / ((1 + (current_speed / (193.7 * speed_limit)) ** 1.3) ** 2406)
-        else:
-            reward = -(1 / tolerance ** 2) * (current_speed - speed_limit) ** 2 + 1
+        reward = -current_speed / 5 + 8
     return reward
 
 def pathfollowing_reward(current_state = None, current_route = None, ego_car_location = None):
@@ -77,8 +73,6 @@ def collision_avoidence_reward(relative_location, ego_car_speed, action):
             else:
                 reward = -1
     return reward
-
-
 
 
 
