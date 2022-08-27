@@ -14,7 +14,7 @@ LR = 0.001  # learning rate
 EPSILON = 0.6  # greedy algorithm
 GAMMA = 0.9  # reward discount
 TARGET_UPDATE = 100  # update the target network after training
-MEMORY_CAPACITY = 100  # the capacity of the memory
+MEMORY_CAPACITY = 5000  # the capacity of the memory
 # N_STATE = 4  # the number of states that can be observed from environment
 # N_ACTION = 3  # the number of action that the agent should have
 # N_CHANNEL = 6
@@ -192,8 +192,11 @@ class DDQN(object):
             for i in range(len(policy_out_next)):
                 max_value = torch.max(policy_out_next[i][condition[i]])
                 max_action = (policy_out_next[i] == max_value).nonzero(as_tuple=True)[0]
+                if len(max_action) > 1:
+                    # if several actions have same action value, choose the first one
+                    max_action = torch.tensor([max_action[0]])
                 max_a_batch.append(max_action)
-            max_a_batch = torch.unsqueeze(torch.tensor(max_a_batch).to(device), dim=1)
+            max_a_batch = torch.unsqueeze(torch.tensor(max_a_batch).to(device, dtype=torch.int64), dim=1)
         q_next = self.target_net(batch_s_).gather(1, max_a_batch)  # use detach to avoid the backpropagation during the training
         q_target = []
         for index, (s, a, r, s_, done) in enumerate(sample_batch):

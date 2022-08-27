@@ -53,7 +53,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
     # here the EPS mainly used to control the random action selection
     EPS_START = 0.99
     EPS_END = 0.05
-    EPS_DECAY = 20
+    EPS_DECAY = 1000
 
     reward_list = []
     simulation = None
@@ -96,8 +96,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             epi_reward = np.array([0.0,0.0])
             totoal_reward = np.array([0.0,0.0])
             route = []
-            # E_thresh =  E_thresh = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * episode / EPS_DECAY)
-            E_thresh = 0
+            E_thresh =  E_thresh = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * episode / EPS_DECAY)
             #########################################################
             try:
                 # Initialize dynamic scenario
@@ -148,6 +147,9 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     new_state_list = [new_state[0], new_state[1], new_state[2]]
                     # here we got tge cumulative reward of the current episode
                     epi_reward += reward
+                    totoal_reward += epi_reward / simulation.currentTime
+                    reward_list.append(epi_reward / simulation.currentTime)
+                    reward_array = np.array(reward_list)
 
                     for i in range(len(RL_agents_list)):
                         # there need to notice that all the objectives need to store same action
@@ -163,9 +165,6 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                                     RL_agent.optimize_model(RL_agents_list[0:i])
                     if done:
                         print("reward_info: ", epi_reward / simulation.currentTime)
-                        totoal_reward += epi_reward /simulation.currentTime
-                        reward_list.append(epi_reward / simulation.currentTime)
-                        reward_array = np.array(reward_list)
                         break
 
                     simulation.updateObjects()
@@ -186,7 +185,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 epi_end = time.time()
                 epi_dur = epi_end - start_time
                 if episode % 20 == 0:
-                    print("current_epi:", episode, "last_epi_duration:", epi_dur)
+                    print("current_epi:", episode, "last_epi_duration:", epi_dur, 'current E_thresh:', E_thresh)
                     print(epi_reward / (simulation.currentTime + 1))
                 if episode % 100 == 0:
                     print("saving model")
@@ -221,12 +220,12 @@ n_action = 25
 n_state_list = [4, 8]
 test_list = [False, False]
 load_model = [False, False]
-save_model = [False, False]
+save_model = [True, True]
 step_list = [0, 0]
 agent_name_list = ['speed', 'path']
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=load_model, current_step=step_list, test_mode=test_list)
-train(episodes=1000, RL_agents_list=RL_agents_list, current_episodes=0,
+train(episodes=3000, RL_agents_list=RL_agents_list, current_episodes=0,
       maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=save_model, test_list=test_list,
-      render_hud=False, save_log=False)
+      render_hud=False, save_log=True)
 
