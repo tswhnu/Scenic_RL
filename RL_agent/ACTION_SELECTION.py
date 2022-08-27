@@ -3,15 +3,14 @@ import random
 import numpy as np
 import math
 
-EPS_DECAY = 500
+EPS_DECAY = 20
 EPS_START = 0.9
 EPS_END = 0.05
 
 
 def action_selection(q_list, threshold_list, action_set, current_eps, test_list):
     action_seq = []
-    initial_action_set = action_set
-    initial_action_table = np.array(initial_action_set).reshape(5, 5)
+
     E_thresh = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * current_eps / EPS_DECAY)
     # first check the length of the Q_list and threshold_list
     if len(q_list) != len(threshold_list):
@@ -39,25 +38,13 @@ def action_selection(q_list, threshold_list, action_set, current_eps, test_list)
                     max_action_value = np.max(action_value_set)
                     # here is the max action which have biggest action value
                     max_action_inset = action_set[np.argmax(action_value_set)]
-                    # for actions choose by speed control agent
-                    # since it will use differnet action selection way
-                    if i == 0:
-                        # find which class of speed control action that belongs to
-                        action_pos = np.where(initial_action_table == max_action_inset)[1][0]
-                        q_table = current_q.reshape(5, 5)
-                        avg_list = np.average(q_table, axis=0)
-                        low_bound = avg_list[action_pos] - threshold
-                        fullfilled_actions = np.where(avg_list >= low_bound)[0]
-                        new_action_set = initial_action_table[:, fullfilled_actions].reshape(-1)
-                        action_seq.append(max_action_inset)
-                    else:
-                        # the low-bound calculate from the threshold
-                        low_bound = max_action_value - threshold
-                        # find all the actions that the action value is above this low-bound
-                        new_action_set = action_set[action_value_set >= low_bound]
-                        # the new action for this objective is random choose from new action set since all of them are considered equally good
-                        new_action = random.choice(new_action_set)
-                        action_seq.append(new_action)
+                    # the low-bound calculate from the threshold
+                    low_bound = max_action_value - threshold
+                    # find all the actions that the action value is above this low-bound
+                    new_action_set = action_set[action_value_set >= low_bound]
+                    # the new action for this objective is random choose from new action set since all of them are considered equally good
+                    new_action = random.choice(new_action_set)
+                    action_seq.append(new_action)
                     if len(new_action_set) == 0:
                         action_set = np.array([new_action])
                     else:
@@ -68,8 +55,3 @@ def action_selection(q_list, threshold_list, action_set, current_eps, test_list)
                     action_set = np.array([action])
                     action_seq.append(action)
         return action_seq
-# a = np.array([0, 1, 3])
-# while True:
-#     action = np.random.choice(a)
-#     if len(np.array([action])) == 0:
-#         break

@@ -17,6 +17,8 @@ def speed_reward(ego_car_speed, tolerance=5):
         reward = current_speed / 10 - 1
     else:
         reward = -current_speed / 5 + 8
+    if reward <= -1:
+        reward = -1
     return reward
 
 def pathfollowing_reward(current_state = None, current_route = None, ego_car_location = None):
@@ -73,6 +75,13 @@ def collision_avoidence_reward(relative_location, ego_car_speed, action):
             else:
                 reward = -1
     return reward
+
+# x = np.arange(100)
+# y = [speed_reward([i / 3.6, 0]) for i in x]
+# plt.plot(x, y)
+# plt.xlabel('speed[km/h]')
+# plt.ylabel('reward')
+# plt.show()
 
 
 

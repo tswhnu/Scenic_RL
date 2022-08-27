@@ -30,7 +30,7 @@ def creat_agents(n_action, n_state_list, agent_name_list, load_model=True, curre
         raise Exception('the len of n_state_list and agent_name_list must be same')
     else:
         for i in range(len(n_state_list)):
-            agent = DDQN(n_state=n_state_list[i], n_action=n_action, agent_name=agent_name_list[i], test=test_mode[i])
+            agent = DDQN(n_state=n_state_list[i], n_action=n_action, test=test_mode[i], agent_name=agent_name_list[i])
             if load_model[i]:
                 agent.load_model(current_step[i])
                 print("model_" + str(i) + "lodaing")
@@ -50,9 +50,13 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
     TH_start = 0.8
     TH_end = 0.15
     TH_decay = 200
+    # here the EPS mainly used to control the random action selection
+    EPS_START = 0.99
+    EPS_END = 0.05
+    EPS_DECAY = 20
+
     reward_list = []
     simulation = None
-    initial_action_set = np.arange(n_action)
 
     try:
         if render_hud:
@@ -92,8 +96,9 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             epi_reward = np.array([0.0,0.0])
             totoal_reward = np.array([0.0,0.0])
             route = []
+            # E_thresh =  E_thresh = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * episode / EPS_DECAY)
+            E_thresh = 0
             #########################################################
-
             try:
                 # Initialize dynamic scenario
                 dynamicScenario._start()
@@ -113,46 +118,29 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 assert simulation.currentTime == 0
                 # terminationReason = None
                 while maxSteps is None or simulation.currentTime < maxSteps:
+                    # initialize the action set with whole action set
+                    action_set = np.arange(n_action)
                     if render_hud:
                         simulation.clock.tick(60)
                         display.fill(COLOR_ALUMINIUM_4)
                         simulation.rendering(display)
                         simulation.hud.render(display)
                         pygame.display.flip()
-                    if simulation.verbosity >= 3:
-                        print(f'    Time step {simulation.currentTime}:')
-
-                    # Compute the actions of the agents in this time step
-                    allActions = OrderedDict()
-                    schedule = simulation.scheduleForAgents()
-                    for agent in schedule:
-                        behavior = agent.behavior
-                        if not behavior._runningIterator:  # TODO remove hack
-                            behavior.start(agent)
-                        actions = behavior.step()
-
-                        assert isinstance(actions, tuple)
-                        if len(actions) == 1 and isinstance(actions[0], (list, tuple)):
-                            actions = tuple(actions[0])
-                        if not simulation.actionsAreCompatible(agent, actions):
-                            raise InvalidScenarioError(f'agent {agent} tried incompatible '
-                                                       f' action(s) {actions}')
-                        allActions[agent] = actions
-
-                    # Execute the actions
-                    if simulation.verbosity >= 3:
-                        for agent, actions in allActions.items():
-                            print(f'      Agent {agent} takes action(s) {actions}')
-                    simulation.executeActions(allActions)
-
                     ####################################################################
-                    Q_list = []
+                    # during the training, there will randomly choose an action to explore
+                    p = np.random.random()
+                    # all the objectives will not explore
+                    if p > E_thresh:
+                        obj_i = None
+                    # here will choose one objective to do exploration
+                    else:
+                        obj_i = np.random.randint(0, len(RL_agents_list))
                     for i in range(len(RL_agents_list)):
-                        # collsion can path following agent can seclect action from what they want
-                        action_value = RL_agents_list[i].action_value(state_list[i])
-                        Q_list.append(action_value)
-                    action_seq = action_selection(Q_list, threshold_list, initial_action_set, episode, test_list=test_list)
-                    final_action = action_seq[-1]
+                        if i == obj_i:
+                            final_action = random.choice(action_set)
+                            action_set = [final_action]
+                        else:
+                            final_action, action_set = RL_agents_list[i].TLQ_action_selection(action_set, state_list[i])
                     # Run the simulation for a single step and read its state back into Scenic
                     new_state, reward, done, _ = simulation.step(
                         action=final_action)  # here need to notice that the reward value here will be a list
@@ -163,14 +151,16 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     for i in range(len(RL_agents_list)):
                         # there need to notice that all the objectives need to store same action
                         RL_agents_list[i].store_transition(state_list[i], final_action, reward[i], new_state_list[i], done)
-                    # RL_path.store_transition(state_list[0], action_seq[0], reward_list[0], new_state, done)
-                    # RL_speed.store_transition(state_list[1], action_seq[1], reward_list[1], new_state[-2:], done)
                     # update the state velue
                     state_list = new_state_list
                     if RL_agents_list[0].memory_counter > MEMORY_CAPACITY:
                         for i, RL_agent in enumerate(RL_agents_list):
                             if test_list[i] is not True:
-                                RL_agent.optimize_model()
+                                print('training')
+                                if i == 0:
+                                    RL_agent.optimize_model()
+                                else:
+                                    RL_agent.optimize_model(RL_agents_list[0:i])
                     if done:
                         print("reward_info: ", epi_reward / simulation.currentTime)
                         totoal_reward += epi_reward /simulation.currentTime
@@ -185,25 +175,13 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     ##########################################################
                     last_position = np.array([simulation.ego.carlaActor.get_location().x,
                                                  simulation.ego.carlaActor.get_location().y])
-                    # trajectory.append(new_state[1])
-                    # route.append([new_state[0], new_state[1]])
-                    actionSequence.append(allActions)
 
             finally:
-                # route = np.array(route)
-                # trajectory = np.array(trajectory)
-                # simulation.draw_trace(simulation.driving_trajectory)
                 if save_log:
                     np.save("./log_01/reward_list" + str(episode) + ".npy", reward_array)
                     np.save("./log_01/vehicle_trajectory" + str(episode) + ".npy", simulation.reference_route)
                     np.save("./log_01/reference_route" + str(episode) + ".npy", simulation.driving_trajectory)
                     np.save("./log_01/vehicle_speed" + str(episode) + ".npy", simulation.speed_list)
-                # reference_route = simulation.reference_route
-                # plt.plot(trajectory[:, 0], trajectory[:, 1])
-                # plt.scatter(simulation.ego_spawn_point[0], simulation.ego_spawn_point[1])
-                # plt.plot(route[:, 0], route[:, 1])
-                # plt.legend(['trajectory','point', 'route'])
-                # plt.show()
                 ##############################################################################
                 epi_end = time.time()
                 epi_dur = epi_end - start_time
@@ -240,14 +218,6 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             pass
 
 n_action = 25
-# n_state_list = [7, 2]
-# agent_name_list = ['path', 'speed']
-# n_state_list = [2, 8]
-# test_list = [True, False]
-# load_model = [True, False]
-# save_model = [False, True]
-# step_list = [600, 0]
-# agent_name_list = ['speed', 'path_following']
 n_state_list = [4, 8]
 test_list = [False, False]
 load_model = [False, False]
@@ -260,7 +230,3 @@ train(episodes=1000, RL_agents_list=RL_agents_list, current_episodes=0,
       maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=save_model, test_list=test_list,
       render_hud=False, save_log=False)
 
-# simulation.run(maxSteps=None)
-#         result = simulation.trajectory
-#         for i, state in enumerate(result):
-#                 egoPos = state

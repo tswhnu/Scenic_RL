@@ -14,7 +14,7 @@ LR = 0.001  # learning rate
 EPSILON = 0.6  # greedy algorithm
 GAMMA = 0.9  # reward discount
 TARGET_UPDATE = 100  # update the target network after training
-MEMORY_CAPACITY = 4000  # the capacity of the memory
+MEMORY_CAPACITY = 100  # the capacity of the memory
 # N_STATE = 4  # the number of states that can be observed from environment
 # N_ACTION = 3  # the number of action that the agent should have
 # N_CHANNEL = 6
@@ -72,7 +72,7 @@ class CNN(nn.Module):
 
 
 class DDQN(object):
-    def __init__(self, n_state = None, n_action = None, test=False, var_eps=True, agent_name = None):
+    def __init__(self, n_state = None, n_action = None, test=False, var_eps=True, agent_name=None, threshold=0.2):
         self.policy_net, self.target_net = Linear_Net(n_state, n_action).to(device), \
                                            Linear_Net(n_state, n_action).to(device)
         self.n_state = n_state
@@ -86,21 +86,55 @@ class DDQN(object):
         self.var_eps = var_eps
         self.agent_name = agent_name
         self.eval_model_load_path = "test"
+        self.q_threshold = threshold
 
     def action_value(self, state):
         state = torch.unsqueeze(torch.tensor(state), dim=0)
         # here directly output the action value
         return self.policy_net.forward(state)
 
-    def MO_action_selection(self, pre_action, state):
-        if pre_action == 0:
-            action = self.select_action(state)
-        # if there have dangerous situation, the speed agent can only select action from certain range
+    def TLQ_action_selection(self, action_set, state):
+        state = torch.unsqueeze(torch.tensor(state), dim=0)
+        #means current objective have no choice but only choose this action
+        if len(action_set) == 1:
+            return action_set[0], action_set
         else:
-            action_value = self.action_value(state).data.cpu().numpy()[0]
-            action = np.argmax(action_value[-2:]) + 3
+            q_value = self.action_value(state).data.cpu().numpy()[0][0]
+            q_action_set = q_value[action_set]
+            max_action_value = np.max(q_action_set)
+            max_action = action_set[np.argmax(q_action_set)]
+            low_bound = max_action_value - self.q_threshold
+            new_action_set = action_set[q_action_set >= low_bound]
+        return max_action, new_action_set
 
-        return action
+    def find_action_range(self, pre_action_range = None, batch_s_=None):
+        #return the action value from the batch
+        action_value = self.action_value(batch_s_)
+        if pre_action_range is not None:
+            new_action_value = torch.squeeze(action_value, dim=0)
+            max_list = []
+            #here will find the max action value from pre_action_set
+            condition = torch.squeeze(pre_action_range == 1, dim=0)
+            #find the max value in the action value,  shape:(1, batch_size)
+            for i in range(len(new_action_value)):
+                max_value = torch.max(new_action_value[i][condition[i]])
+                max_list.append(max_value)
+            max_value_tensor = torch.unsqueeze(torch.tensor(max_list).to(device), dim=0)
+        else:
+            max_value_tensor = torch.max(action_value, dim=2).values
+        #make a array have same shape with max value, used to calculate low bound of q value
+        threshold_list = (torch.ones(1, 64) * self.q_threshold).to(device)
+        # lowest acceptable q value for the action set selection
+        low_bound = max_value_tensor - threshold_list
+        low_bound = torch.unsqueeze(low_bound, dim=2)
+        # the action value above the low bound will be marked by one
+        action_range = torch.where(action_value >= low_bound, 1, 0)
+        if pre_action_range is not None:
+            action_range = action_range & pre_action_range
+        else:
+            pass
+        return action_range
+
 
     def select_action(self, state):
         state = torch.unsqueeze(torch.tensor(state), dim=0)
@@ -112,36 +146,20 @@ class DDQN(object):
             E_thresh = EPS_END + (EPS_START - EPS_END) * \
                        math.exp(-1. * self.learn_step / EPS_DECAY)
         if self.test_mode:
+            E_thresh = 0.0
+        if p > E_thresh:
             actions_value = self.policy_net.forward(state)
-            q = actions_value.data.cpu().numpy()[0]
-            max_action = torch.max(actions_value, 1)[1].data.cpu().numpy()[0]
-            max_q = q[max_action]
-            if self.agent_name == 'path':
-                th = 0.8
-            else:
-                th = 0.9
-            prefered_actions = []
-            for i in range(len(q)):
-                if q[i] >= th * max_q:
-                    prefered_actions.append(i)
-            if prefered_actions != []:
-                final_action = random.choice(prefered_actions)
-            else:
-                final_action = max_action
-            return max_action
+            return torch.max(actions_value, 1)[1].data.cpu().numpy()[0]
         else:
-            if p > E_thresh:
-                actions_value = self.policy_net.forward(state)
-                return torch.max(actions_value, 1)[1].data.cpu().numpy()[0]
-            else:
-                return np.random.randint(0, self.n_action)
+            return np.random.randint(0, self.n_action)
 
     def store_transition(self, s, a, r, s_, done):
         transition = [s, a, r, s_, done]
         self.memory.append(transition)
         self.memory_counter += 1
 
-    def optimize_model(self):
+
+    def optimize_model(self, pre_DQN_list = None):
 
         if self.learn_step % TARGET_UPDATE == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
@@ -149,16 +167,33 @@ class DDQN(object):
         self.learn_step += 1
 
         # get the samples to train the policy net
-        sample_batch = random.sample(self.memory, BATCH_SIZE)
+        sample_index = np.random.choice(len(self.memory), BATCH_SIZE, replace=False)
+        if pre_DQN_list is None:
+            pass
+        else:
+            action_range = None
+            for i in range(len(pre_DQN_list)):
+                # here should sample s_ from each DQN memory
+                batch_s_ = torch.FloatTensor(np.array([transition[3] for transition in pre_DQN_list[i].memory[sample_index]])).to(device)
+                action_range = pre_DQN_list[i].find_action_range(action_range, batch_s_)
+            condition = torch.squeeze(action_range == 1, dim=0)
+        # here is the sample from current DQN
+        sample_batch = self.memory[sample_index]
         batch_s = torch.FloatTensor(np.array([transition[0] for transition in sample_batch])).to(device)
         batch_a = torch.LongTensor(np.array([transition[1] for transition in sample_batch])).unsqueeze(dim=1).to(device)
         batch_r = torch.FloatTensor(np.array([transition[2] for transition in sample_batch])).to(device)
         batch_s_ = torch.FloatTensor(np.array([transition[3] for transition in sample_batch])).to(device)
-
         # calculate the q_value
         policy_out_put = self.policy_net(batch_s)
         q_eval = policy_out_put.gather(1, batch_a)
-        max_a_batch = torch.argmax(policy_out_put, dim=1).unsqueeze(dim=1)
+        if pre_DQN_list is None:
+            max_a_batch = torch.argmax(policy_out_put, dim=1).unsqueeze(dim=1)
+        else:
+            max_a_batch = []
+            for i in range(len(policy_out_put)):
+                max_value = torch.max(policy_out_put[i][condition[i]])
+                max_action = (policy_out_put[i] == max_value).nonzero(as_tuple=True)[0]
+                print(max_action)
         q_next = self.target_net(batch_s_).gather(1, max_a_batch)  # use detach to avoid the backpropagation during the training
         q_target = []
         for index, (s, a, r, s_, done) in enumerate(sample_batch):
