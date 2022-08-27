@@ -137,6 +137,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                         obj_i = np.random.randint(0, len(RL_agents_list))
                     for i in range(len(RL_agents_list)):
                         if i == obj_i:
+                            # this objective will choose action randomly from action set
                             final_action = random.choice(action_set)
                             action_set = [final_action]
                         else:
@@ -156,7 +157,6 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     if RL_agents_list[0].memory_counter > MEMORY_CAPACITY:
                         for i, RL_agent in enumerate(RL_agents_list):
                             if test_list[i] is not True:
-                                print('training')
                                 if i == 0:
                                     RL_agent.optimize_model()
                                 else:

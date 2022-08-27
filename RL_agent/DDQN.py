@@ -174,26 +174,26 @@ class DDQN(object):
             action_range = None
             for i in range(len(pre_DQN_list)):
                 # here should sample s_ from each DQN memory
-                batch_s_ = torch.FloatTensor(np.array([transition[3] for transition in pre_DQN_list[i].memory[sample_index]])).to(device)
+                batch_s_ = torch.FloatTensor(np.array([transition[3] for transition in [pre_DQN_list[i].memory[j] for j in sample_index]])).to(device)
                 action_range = pre_DQN_list[i].find_action_range(action_range, batch_s_)
             condition = torch.squeeze(action_range == 1, dim=0)
         # here is the sample from current DQN
-        sample_batch = self.memory[sample_index]
+        sample_batch = [self.memory[i] for i in sample_index]
         batch_s = torch.FloatTensor(np.array([transition[0] for transition in sample_batch])).to(device)
         batch_a = torch.LongTensor(np.array([transition[1] for transition in sample_batch])).unsqueeze(dim=1).to(device)
         batch_r = torch.FloatTensor(np.array([transition[2] for transition in sample_batch])).to(device)
         batch_s_ = torch.FloatTensor(np.array([transition[3] for transition in sample_batch])).to(device)
         # calculate the q_value
-        policy_out_put = self.policy_net(batch_s)
-        q_eval = policy_out_put.gather(1, batch_a)
+        policy_out_next = self.policy_net(batch_s_)
         if pre_DQN_list is None:
-            max_a_batch = torch.argmax(policy_out_put, dim=1).unsqueeze(dim=1)
+            max_a_batch = torch.argmax(policy_out_next, dim=1).unsqueeze(dim=1)
         else:
             max_a_batch = []
-            for i in range(len(policy_out_put)):
-                max_value = torch.max(policy_out_put[i][condition[i]])
-                max_action = (policy_out_put[i] == max_value).nonzero(as_tuple=True)[0]
-                print(max_action)
+            for i in range(len(policy_out_next)):
+                max_value = torch.max(policy_out_next[i][condition[i]])
+                max_action = (policy_out_next[i] == max_value).nonzero(as_tuple=True)[0]
+                max_a_batch.append(max_action)
+            max_a_batch = torch.unsqueeze(torch.tensor(max_a_batch).to(device), dim=1)
         q_next = self.target_net(batch_s_).gather(1, max_a_batch)  # use detach to avoid the backpropagation during the training
         q_target = []
         for index, (s, a, r, s_, done) in enumerate(sample_batch):
@@ -203,6 +203,8 @@ class DDQN(object):
                 q_target_value = batch_r.squeeze()[index]
             q_target.append(q_target_value)
         q_target = torch.tensor(q_target).to(device)
+        policy_out_put = self.policy_net(batch_s)
+        q_eval = policy_out_put.gather(1, batch_a)
         loss = self.loss_func(q_eval.squeeze(), q_target)
         self.optimizer.zero_grad()
         loss.backward()
