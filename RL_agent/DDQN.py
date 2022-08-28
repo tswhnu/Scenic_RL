@@ -105,7 +105,8 @@ class DDQN(object):
             max_action = action_set[np.argmax(q_action_set)]
             low_bound = max_action_value - self.q_threshold
             new_action_set = action_set[q_action_set >= low_bound]
-        return max_action, new_action_set
+            new_action = random.choice(new_action_set)
+        return new_action, new_action_set
 
     def find_action_range(self, pre_action_range = None, batch_s_=None):
         #return the action value from the batch

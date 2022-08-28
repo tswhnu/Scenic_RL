@@ -24,13 +24,14 @@ from scenic.simulators.carla.utils.HUD_render import *
 # the parameters in the threshold list define the range of accpetable action value
 
 # define differnet RL agent for different objectives
-def creat_agents(n_action, n_state_list, agent_name_list, load_model=True, current_step=150, test_mode=False):
+def creat_agents(n_action, n_state_list, agent_name_list, load_model=True, current_step=150, test_mode=False, threshold_list = None):
     agent_list = []
     if len(n_state_list) != len(agent_name_list):
         raise Exception('the len of n_state_list and agent_name_list must be same')
     else:
         for i in range(len(n_state_list)):
-            agent = DDQN(n_state=n_state_list[i], n_action=n_action, test=test_mode[i], agent_name=agent_name_list[i])
+            agent = DDQN(n_state=n_state_list[i], n_action=n_action, test=test_mode[i],
+                         agent_name=agent_name_list[i], threshold=threshold_list[i])
             if load_model[i]:
                 agent.load_model(current_step[i])
                 print("model_" + str(i) + "lodaing")
@@ -46,7 +47,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                                        model='scenic.simulators.carla.model')
     simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
 
-    threshold_list = np.array([0.2, 0.2])
+
     TH_start = 0.8
     TH_end = 0.15
     TH_decay = 200
@@ -96,7 +97,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             epi_reward = np.array([0.0,0.0])
             totoal_reward = np.array([0.0,0.0])
             route = []
-            E_thresh =  E_thresh = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * episode / EPS_DECAY)
+            E_thresh =  0
             #########################################################
             try:
                 # Initialize dynamic scenario
@@ -218,14 +219,15 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
 
 n_action = 25
 n_state_list = [4, 8]
-test_list = [False, False]
-load_model = [False, False]
-save_model = [True, True]
-step_list = [0, 0]
+test_list = [True, True]
+load_model = [True, True]
+save_model = [False, False]
+step_list = [2500, 2500]
 agent_name_list = ['speed', 'path']
+threshold_list = np.array([0.6, 0.2])
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
-                              load_model=load_model, current_step=step_list, test_mode=test_list)
-train(episodes=3000, RL_agents_list=RL_agents_list, current_episodes=0,
+                              load_model=load_model, current_step=step_list, test_mode=test_list, threshold_list=threshold_list)
+train(episodes=3000, RL_agents_list=RL_agents_list, current_episodes=2600,
       maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=save_model, test_list=test_list,
       render_hud=False, save_log=True)
 
