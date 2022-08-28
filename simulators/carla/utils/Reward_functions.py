@@ -47,7 +47,8 @@ def pathfollowing_reward(current_state = None, current_route = None, ego_car_loc
 
     reward = heading_reward + distance_reward
 
-
+    if reward <= -1:
+        reward = -1
     return reward
 
 def collision_avoidence_reward(relative_location, ego_car_speed, action):

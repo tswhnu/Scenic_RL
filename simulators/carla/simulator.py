@@ -854,7 +854,7 @@ class CarlaSimulation(DrivingSimulation):
         # defination of different actions
         ## collision action
         # steer action
-
+        done_info = 'None'
         selected_action = self.action_table[:, action]
         throttle_value = selected_action[0]
         steer_value = selected_action[1]
@@ -891,11 +891,13 @@ class CarlaSimulation(DrivingSimulation):
         if len(self.collision_history) != 0:
             print("collision")
             done = True
+            done_info = 'collision'
         # here check whether the vehicle reach the destination
         elif math.sqrt(
                 (ego_location[0] - final_destination[0]) ** 2 + (ego_location[1] - final_destination[1]) ** 2) < 2:
             print("reach the destination")
             done = True
+            done_info = 'reach'
         # if the vehicle travel exceed a range
         elif math.sqrt((ego_location[0] - self.ego_spawn_point[0]) ** 2 + (
                 ego_location[1] - self.ego_spawn_point[1]) ** 2) > 200:
@@ -922,7 +924,7 @@ class CarlaSimulation(DrivingSimulation):
         spectator_transform.location += carla.Location(x=-2, y=0, z=2.0)
         self.spectator.set_transform(spectator_transform)
 
-        return new_state, reward, done, len(self.collision_history)
+        return new_state, reward, done, done_info
 
     def getProperties(self, obj, properties):
         # Extract Carla properties

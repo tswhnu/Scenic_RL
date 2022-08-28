@@ -24,14 +24,15 @@ from scenic.simulators.carla.utils.HUD_render import *
 # the parameters in the threshold list define the range of accpetable action value
 
 # define differnet RL agent for different objectives
-def creat_agents(n_action, n_state_list, agent_name_list, load_model=True, current_step=150, test_mode=False, threshold_list = None):
+def creat_agents(n_action, n_state_list, agent_name_list, load_model=True,
+                 current_step=150, test_mode=False, threshold_list = [0.2, 0.2]):
     agent_list = []
     if len(n_state_list) != len(agent_name_list):
         raise Exception('the len of n_state_list and agent_name_list must be same')
     else:
         for i in range(len(n_state_list)):
-            agent = DDQN(n_state=n_state_list[i], n_action=n_action, test=test_mode[i],
-                         agent_name=agent_name_list[i], threshold=threshold_list[i])
+            agent = DDQN(n_state=n_state_list[i], n_action=n_action, test=test_mode[i], agent_name=agent_name_list[i],
+                         threshold=threshold_list[i])
             if load_model[i]:
                 agent.load_model(current_step[i])
                 print("model_" + str(i) + "lodaing")
@@ -48,13 +49,11 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
     simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
 
 
-    TH_start = 0.8
-    TH_end = 0.15
-    TH_decay = 200
     # here the EPS mainly used to control the random action selection
     EPS_START = 0.99
     EPS_END = 0.05
     EPS_DECAY = 1000
+    trained_episodes = 0
 
     reward_list = []
     simulation = None
@@ -82,7 +81,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                                                                 carla_client=simulator.client)
 
         for episode in range(current_episodes, episodes):
-
+            trained_episodes += 1
             scene, _ = scenario.generate()
             simulation = simulator.createSimulation(scene, render_hud=render_hud)
             simulation.episode = episode
@@ -97,7 +96,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
             epi_reward = np.array([0.0,0.0])
             totoal_reward = np.array([0.0,0.0])
             route = []
-            E_thresh =  0
+            E_thresh =  EPS_END + (EPS_START - EPS_END) * math.exp(-1. * episode / EPS_DECAY)
             #########################################################
             try:
                 # Initialize dynamic scenario
@@ -148,7 +147,6 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     new_state_list = [new_state[0], new_state[1], new_state[2]]
                     # here we got tge cumulative reward of the current episode
                     epi_reward += reward
-                    totoal_reward += epi_reward / simulation.currentTime
                     reward_list.append(epi_reward / simulation.currentTime)
                     reward_array = np.array(reward_list)
 
@@ -217,17 +215,176 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
         else:
             pass
 
+def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
+         n_state_list=None, npc_vehicle_num = 100, npc_ped_num = 100,
+         traffic_generation = False, render_hud = True, save_log=False):
+
+    RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list,
+                                  agent_name_list=agent_name_list,
+                                  load_model=[True]*len(n_state_list),
+                                  current_step=step_list,
+                                  test_mode=[True]*len(n_state_list),
+                                  threshold_list=threshold_list)
+    scenario = scenic.scenarioFromFile('carlaChallenge10.scenic',
+                                       model='scenic.simulators.carla.model')
+    simulator = CarlaSimulator(carla_map='Town05', map_path='../../../tests/formats/opendrive/maps/CARLA/Town05.xodr')
+
+
+    # here the EPS mainly used to control the random action selection
+    total_episodes = episodes
+    reward_list = []
+    simulation = None
+    collision_count = 0
+    success_count = 0
+
+    try:
+        if render_hud:
+            # Init Pygame
+            pygame.init()
+            display = pygame.display.set_mode(
+                (1920, 1080),
+                pygame.HWSURFACE | pygame.DOUBLEBUF)
+
+            # Place a title to game window
+            pygame.display.set_caption('test')
+
+            # Show loading screen
+            font = pygame.font.Font(pygame.font.get_default_font(), 20)
+            text_surface = font.render('Rendering map...', True, COLOR_WHITE)
+            display.blit(text_surface, text_surface.get_rect(center=(1920 / 2, 1080 / 2)))
+            pygame.display.flip()
+            clock = pygame.time.Clock()
+        if traffic_generation:
+            vehicle_list, all_id, all_actors = generate_traffic(vehicle_num=npc_vehicle_num,
+                                                                ped_num=npc_ped_num,
+                                                                carla_client=simulator.client)
+        test_start = time.time()
+        for episode in range(0, episodes):
+            scene, _ = scenario.generate()
+            simulation = simulator.createSimulation(scene, render_hud=render_hud)
+            simulation.episode = episode
+
+            last_position = None
+            actionSequence = []
+            # Initialize dynamic scenario
+            veneer.beginSimulation(simulation)
+            dynamicScenario = simulation.scene.dynamicScenario
+            ##########################################################
+            start_time = time.time()
+            epi_reward = np.array([0.0,0.0])
+            totoal_reward = np.array([0.0,0.0])
+            route = []
+            #########################################################
+            try:
+                # Initialize dynamic scenario
+                dynamicScenario._start()
+                # Update all objects in case the simulator has adjusted any dynamic
+                # properties during setup
+                simulation.updateObjects()
+                ###################################################################################
+                # here get the initial state for the RL agent
+                initial_state= simulation.get_state()
+                initial_ego_position = np.array([simulation.ego.carlaActor.get_location().x,
+                                                 simulation.ego.carlaActor.get_location().y])
+                state_list = [initial_state[0], initial_state[1],  initial_state[2]]
+                last_position = initial_ego_position
+                ###################################################################################
+                # Run simulation
+                assert simulation.currentTime == 0
+                # terminationReason = None
+                while maxSteps is None or simulation.currentTime < maxSteps:
+                    # initialize the action set with whole action set
+                    action_set = np.arange(n_action)
+                    if render_hud:
+                        simulation.clock.tick(60)
+                        display.fill(COLOR_ALUMINIUM_4)
+                        simulation.rendering(display)
+                        simulation.hud.render(display)
+                        pygame.display.flip()
+                    ####################################################################
+                    for i in range(len(RL_agents_list)):
+                            final_action, action_set = RL_agents_list[i].TLQ_action_selection(action_set, state_list[i])
+                    # Run the simulation for a single step and read its state back into Scenic
+                    new_state, reward, done, done_info = simulation.step(
+                        action=final_action)  # here need to notice that the reward value here will be a list
+                    new_state_list = [new_state[0], new_state[1], new_state[2]]
+                    # here we got tge cumulative reward of the current episode
+                    epi_reward += reward
+
+                    # update the state velue
+                    state_list = new_state_list
+
+                    if done:
+                        print("reward_info: ", epi_reward / simulation.currentTime)
+                        reward_list.append(epi_reward / simulation.currentTime)
+                        reward_array = np.array(reward_list)
+                        if done_info == 'collision':
+                            collision_count += 1
+                        elif done_info == 'reach':
+                            success_count += 1
+                        break
+
+                    simulation.updateObjects()
+                    simulation.currentTime += 1
+
+                    # Save the new state
+                    ##########################################################
+                    last_position = np.array([simulation.ego.carlaActor.get_location().x,
+                                                 simulation.ego.carlaActor.get_location().y])
+
+            finally:
+                if save_log:
+                    np.save("./log_01/reward_list" + str(episode) + ".npy", reward_array)
+                    np.save("./log_01/vehicle_trajectory" + str(episode) + ".npy", simulation.reference_route)
+                    np.save("./log_01/reference_route" + str(episode) + ".npy", simulation.driving_trajectory)
+                    np.save("./log_01/vehicle_speed" + str(episode) + ".npy", simulation.speed_list)
+                ##############################################################################
+                epi_end = time.time()
+                epi_dur = epi_end - start_time
+                if episode % 20 == 0:
+                    print("current_epi:", episode, "last_epi_duration:", epi_dur)
+                    print(epi_reward / (simulation.currentTime + 1))
+                    if episode != 0:
+                        print('total reward:', totoal_reward / episode)
+                ##############################################################################
+                simulation.destroy()
+                for obj in simulation.scene.objects:
+                    disableDynamicProxyFor(obj)
+                for agent in simulation.agents:
+                    agent.behavior.stop()
+                for monitor in simulation.scene.monitors:
+                    monitor.stop()
+                veneer.endSimulation(simulation)
+        test_end = time.time()
+        test_dur = test_end - test_start
+    finally:
+        print("average reward: "+str(np.average(reward_array, axis=0))+", average epi duration: "+ str(test_dur / total_episodes))
+        print('success: ', success_count, 'collison: ', collision_count)
+        if traffic_generation and simulation is not None:
+            print('\ndestroying %d vehicles' % len(vehicle_list))
+            simulator.client.apply_batch([carla.command.DestroyActor(x) for x in vehicle_list])
+            # stop walker controllers (list is [controller, actor, controller, actor ...])
+            for i in range(0, len(all_id), 2):
+                all_actors[i].stop()
+            print('\ndestroying ' +  str(len(all_actors) // 2) + ' walkers')
+            simulator.client.apply_batch([carla.command.DestroyActor(x) for x in all_id])
+            time.sleep(0.5)
+        else:
+            pass
+
 n_action = 25
+threshold_list = np.array([0.7, 0.2])
 n_state_list = [4, 8]
 test_list = [True, True]
 load_model = [True, True]
 save_model = [False, False]
 step_list = [2500, 2500]
 agent_name_list = ['speed', 'path']
-threshold_list = np.array([0.6, 0.2])
-RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
-                              load_model=load_model, current_step=step_list, test_mode=test_list, threshold_list=threshold_list)
-train(episodes=3000, RL_agents_list=RL_agents_list, current_episodes=2600,
-      maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=save_model, test_list=test_list,
-      render_hud=False, save_log=True)
+test(episodes=100, n_action=n_action, agent_name_list=agent_name_list, n_state_list=n_state_list, traffic_generation=False,
+     render_hud=False, save_log=False)
+# RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
+#                               load_model=load_model, current_step=step_list, test_mode=test_list, threshold_list=threshold_list)
+# train(episodes=3000, RL_agents_list=RL_agents_list, current_episodes=2600,
+#       maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=save_model, test_list=test_list,
+#       render_hud=False, save_log=True)
 
