@@ -51,30 +51,24 @@ def pathfollowing_reward(current_state = None, current_route = None, ego_car_loc
         reward = -1
     return reward
 
-def collision_avoidence_reward(relative_location, ego_car_speed, action):
+def collision_avoidence_reward(relative_location, ego_car_speed,collision_flag = 0):
     vehicle_vel = math.sqrt(ego_car_speed[0] ** 2 + ego_car_speed[1] ** 2)
     distance = math.sqrt(relative_location[0] ** 2 + relative_location[1] ** 2)
-
-
-    # if there no need to have any action
-    if relative_location == [0, 0]:
-        if action == 0:
-            reward = 0.5
-        else:
-            reward = -0.5
+    # first judge whether there have any collison
+    if collision_flag == 1:
+        reward = -1
+    # if there don't have any collsion, then the collision reward will based on safety distance with dangerous vehicle
     else:
-        collision_time = distance / (vehicle_vel + 0.01)
-        if distance > 5:
+        # here means that the system actually didn't detect any dangerous actors
+        if relative_location == [0, 0]:
+            reward = 0
+        #when there have dangerous actors
+        else:
+            collision_time = (distance - 5) / (vehicle_vel + 0.01)
             if collision_time >= 1.5:
                 reward = 1
             else:
-                reward = 2 * collision_time - 2
-        else:
-            speed_limit = 0
-            if vehicle_vel <= 0.5:
-                reward = 1
-            else:
-                reward = -1
+                reward = 2 * collision_time - 1
     return reward
 
 # x = np.arange(100)

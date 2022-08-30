@@ -381,6 +381,10 @@ class CarlaSimulation(DrivingSimulation):
             relative_heading = self.angle_diff(danger_heading)
             relative_location = [dangerous_actor_transform.location.x - ego_location[0],
                                 dangerous_actor_transform.location.y - ego_location[1]]
+        if len(self.collision_history) != 0:
+            collision_flag = 1
+        else:
+            collision_flag = 0
         # danger_speed = [self.danger_actor.get_velocity().x, self.danger_actor.get_velocity().y]
         # danger_vel = math.sqrt(danger_speed[0] ** 2 + danger_speed[1] ** 2)
         # danger_vel = danger_vel * 3.6
@@ -390,7 +394,8 @@ class CarlaSimulation(DrivingSimulation):
         state_speed = state_collision = np.array([last_speed, current_speed,
                                                   current_throttle, current_brake]).astype(np.single)
 
-        state_collsion = [relative_location[0], relative_location[1], vehicle_vel]
+        state_collsion = np.array([relative_location[0], relative_location[1],
+                                   vehicle_vel, collision_flag]).astype(np.single)
         return [state_speed, state_path, state_collsion]
 
         # return np.append(trace, [ego_location, ego_speed]).astype(np.single)
@@ -879,7 +884,7 @@ class CarlaSimulation(DrivingSimulation):
         # else:
         #     throttle = 0.0
         #     brake = min(abs(acceleration), 0.3)
-        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=self.ego_steer, throttle=throttle, brake=brake))
+        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=0.0, throttle=throttle, brake=brake))
         # the env information
         ego_location = [self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y]
         ego_speed = [self.ego.carlaActor.get_velocity().x, self.ego.carlaActor.get_velocity().y]
@@ -910,9 +915,10 @@ class CarlaSimulation(DrivingSimulation):
         rv = speed_reward(ego_speed, 5)
         rp = pathfollowing_reward(current_state=self.get_state()[1], current_route=self.trace_route(), ego_car_location=ego_location)
         #### collisioin reward
-        # collision_state = self.get_state()[2]
-        # rc = collision_avoidence_reward(relative_location=[collision_state[0], collision_state[1]], ego_car_speed=ego_speed, action = actions[0])
-        reward = np.array([rv, rp])
+        collision_state = self.get_state()[2]
+        rc = collision_avoidence_reward(relative_location=[collision_state[0], collision_state[1]],
+                                        ego_car_speed=ego_speed, collision_flag=collision_state[-1])
+        reward = np.array([rc, rv])
         ############################################################
         # Run simulation for one timestep
         self.tick()

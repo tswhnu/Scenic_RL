@@ -10,7 +10,7 @@ import math
 
 # the defination of the hyper parameters
 BATCH_SIZE = 64  # batch size of the training data
-LR = 0.0005  # learning rate
+LR = 0.001 # learning rate
 EPSILON = 0.6  # greedy algorithm
 GAMMA = 0.9  # reward discount
 TARGET_UPDATE = 100  # update the target network after training
@@ -21,10 +21,6 @@ MEMORY_CAPACITY = 5000  # the capacity of the memory
 # decide the device used to train the network
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # the structure of the network
-
-EPS_START = 0.99
-EPS_END = 0.05
-EPS_DECAY = 20
 
 
 class Linear_Net(nn.Module):
@@ -105,8 +101,8 @@ class DDQN(object):
             max_action = action_set[np.argmax(q_action_set)]
             low_bound = max_action_value - self.q_threshold
             new_action_set = action_set[q_action_set >= low_bound]
-            new_action = random.choice(new_action_set)
-        return new_action, new_action_set
+            # new_action = random.choice(new_action_set)
+        return max_action, new_action_set
 
     def find_action_range(self, pre_action_range = None, batch_s_=None):
         #return the action value from the batch

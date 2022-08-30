@@ -52,7 +52,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
     # here the EPS mainly used to control the random action selection
     EPS_START = 0.99
     EPS_END = 0.05
-    EPS_DECAY = 1000
+    EPS_DECAY = 500
     trained_episodes = 0
 
     reward_list = []
@@ -110,7 +110,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 initial_state= simulation.get_state()
                 initial_ego_position = np.array([simulation.ego.carlaActor.get_location().x,
                                                  simulation.ego.carlaActor.get_location().y])
-                state_list = [initial_state[0], initial_state[1],  initial_state[2]]
+                state_list = [initial_state[2], initial_state[0],  initial_state[1]]
                 last_position = initial_ego_position
                 ###################################################################################
                 # Run simulation
@@ -144,7 +144,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     # Run the simulation for a single step and read its state back into Scenic
                     new_state, reward, done, _ = simulation.step(
                         action=final_action)  # here need to notice that the reward value here will be a list
-                    new_state_list = [new_state[0], new_state[1], new_state[2]]
+                    new_state_list = [new_state[2], new_state[0], new_state[1]]
                     # here we got tge cumulative reward of the current episode
                     epi_reward += reward
                     reward_list.append(epi_reward / simulation.currentTime)
@@ -303,7 +303,7 @@ def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
                         pygame.display.flip()
                     ####################################################################
                     for i in range(len(RL_agents_list)):
-                            final_action, action_set = RL_agents_list[i].TLQ_action_selection(action_set, state_list[i])
+                        final_action, action_set = RL_agents_list[i].TLQ_action_selection(action_set, state_list[i])
                     # Run the simulation for a single step and read its state back into Scenic
                     new_state, reward, done, done_info = simulation.step(
                         action=final_action)  # here need to notice that the reward value here will be a list
@@ -373,18 +373,18 @@ def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
             pass
 
 n_action = 25
-threshold_list = np.array([0.7, 0.2])
-n_state_list = [4, 8]
+threshold_list = np.array([0.5, 0.3])
+n_state_list = [4, 4]
 test_list = [True, True]
 load_model = [True, True]
 save_model = [False, False]
-step_list = [2500, 2500]
-agent_name_list = ['speed', 'path']
-test(episodes=100, n_action=n_action, agent_name_list=agent_name_list, n_state_list=n_state_list, traffic_generation=False,
-     render_hud=False, save_log=False)
-# RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
-#                               load_model=load_model, current_step=step_list, test_mode=test_list, threshold_list=threshold_list)
-# train(episodes=3000, RL_agents_list=RL_agents_list, current_episodes=2600,
-#       maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=save_model, test_list=test_list,
-#       render_hud=False, save_log=True)
+step_list = [1200, 1200]
+agent_name_list = ['collision', 'speed']
+# test(episodes=100, n_action=n_action, agent_name_list=agent_name_list, n_state_list=n_state_list, traffic_generation=False,
+#      render_hud=False, save_log=False)
+RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
+                              load_model=load_model, current_step=step_list, test_mode=test_list, threshold_list=threshold_list)
+train(episodes=3000, RL_agents_list=RL_agents_list, current_episodes=1200,
+      maxSteps=1000, n_state_list=n_state_list, traffic_generation=True, save_model=save_model, test_list=test_list,
+      render_hud=False, save_log=False)
 
