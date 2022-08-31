@@ -394,9 +394,14 @@ class CarlaSimulation(DrivingSimulation):
         state_speed = state_collision = np.array([last_speed, current_speed,
                                                   current_throttle, current_brake]).astype(np.single)
 
-        state_collsion = np.array([relative_location[0], relative_location[1],
-                                   vehicle_vel, collision_flag]).astype(np.single)
-        return [state_speed, state_path, state_collsion]
+        state_collision = np.array([relative_location[0], relative_location[1],
+                                    vehicle_vel, collision_flag]).astype(np.single)
+        state = {
+            'path': state_path,
+            'speed': state_speed,
+            'collision': state_collision
+        }
+        return state
 
         # return np.append(trace, [ego_location, ego_speed]).astype(np.single)
 
@@ -863,12 +868,12 @@ class CarlaSimulation(DrivingSimulation):
         selected_action = self.action_table[:, action]
         throttle_value = selected_action[0]
         steer_value = selected_action[1]
-        if throttle_value >= 0:
-            throttle = throttle_value
-            brake = 0
-        else:
-            throttle = 0
-            brake = abs(throttle_value)
+        # if throttle_value >= 0:
+        #     throttle = throttle_value
+        #     brake = 0
+        # else:
+        #     throttle = 0
+        #     brake = abs(throttle_value)
         self.ego_steer += steer_value
         # limit the range of steer angle
         if self.ego_steer < 0:
@@ -876,15 +881,15 @@ class CarlaSimulation(DrivingSimulation):
         else:
             self.ego_steer = min(0.8, self.ego_steer)
         ################################################################################################################
-        # speed_controller = PIDLongitudinalController(vehicle=self.ego.carlaActor)
-        # acceleration = speed_controller.run_step(self.speed_limit)
-        # if acceleration >= 0.0:
-        #     throttle = min(acceleration, 0.8)
-        #     brake = 0.0
-        # else:
-        #     throttle = 0.0
-        #     brake = min(abs(acceleration), 0.3)
-        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=0.0, throttle=throttle, brake=brake))
+        speed_controller = PIDLongitudinalController(vehicle=self.ego.carlaActor)
+        acceleration = speed_controller.run_step(self.speed_limit)
+        if acceleration >= 0.0:
+            throttle = min(acceleration, 0.8)
+            brake = 0.0
+        else:
+            throttle = 0.0
+            brake = min(abs(acceleration), 0.3)
+        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=self.ego_steer, throttle=throttle, brake=brake))
         # the env information
         ego_location = [self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y]
         ego_speed = [self.ego.carlaActor.get_velocity().x, self.ego.carlaActor.get_velocity().y]
@@ -913,12 +918,16 @@ class CarlaSimulation(DrivingSimulation):
         else:
             done = False
         rv = speed_reward(ego_speed, 5)
-        rp = pathfollowing_reward(current_state=self.get_state()[1], current_route=self.trace_route(), ego_car_location=ego_location)
+        rp = pathfollowing_reward(current_state=self.get_state()['path'], current_route=self.trace_route(), ego_car_location=ego_location)
         #### collisioin reward
-        collision_state = self.get_state()[2]
+        collision_state = self.get_state()['collision']
         rc = collision_avoidence_reward(relative_location=[collision_state[0], collision_state[1]],
                                         ego_car_speed=ego_speed, collision_flag=collision_state[-1])
-        reward = np.array([rc, rv])
+        reward = {
+            'collision': rc,
+            'speed': rv,
+            'path': rp
+        }
         ############################################################
         # Run simulation for one timestep
         self.tick()

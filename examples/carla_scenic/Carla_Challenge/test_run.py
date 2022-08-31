@@ -40,7 +40,7 @@ def creat_agents(n_action, n_state_list, agent_name_list, load_model=True,
     return agent_list
 
 
-def train(episodes=None, maxSteps=None, RL_agents_list=None,
+def train(episodes=None, maxSteps=None, RL_agents_list=None, agent_name_list = None,
           current_episodes=150, n_state_list=None,
           npc_vehicle_num = 100, npc_ped_num = 100,
           traffic_generation = False, save_model=False, test_list=[True, True, True], render_hud = True, save_log=False):
@@ -55,7 +55,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
     EPS_DECAY = 500
     trained_episodes = 0
 
-    reward_list = []
+    reward_hist = []
     simulation = None
 
     try:
@@ -110,7 +110,9 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 initial_state= simulation.get_state()
                 initial_ego_position = np.array([simulation.ego.carlaActor.get_location().x,
                                                  simulation.ego.carlaActor.get_location().y])
-                state_list = [initial_state[2], initial_state[0],  initial_state[1]]
+                state_list = []
+                for i in agent_name_list:
+                    state_list.append(initial_state[i])
                 last_position = initial_ego_position
                 ###################################################################################
                 # Run simulation
@@ -144,15 +146,20 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     # Run the simulation for a single step and read its state back into Scenic
                     new_state, reward, done, _ = simulation.step(
                         action=final_action)  # here need to notice that the reward value here will be a list
-                    new_state_list = [new_state[2], new_state[0], new_state[1]]
+                    new_state_list = []
+                    # here we store the value from reward dic to a list for the convenience of calculate
+                    reward_list = []
+                    for i in agent_name_list:
+                        new_state_list.append(new_state[i])
+                        reward_list.append(reward[i])
                     # here we got tge cumulative reward of the current episode
-                    epi_reward += reward
-                    reward_list.append(epi_reward / simulation.currentTime)
-                    reward_array = np.array(reward_list)
+                    epi_reward += reward_list
+                    reward_hist.append(epi_reward / simulation.currentTime)
+                    reward_array = np.array(reward_hist)
 
                     for i in range(len(RL_agents_list)):
                         # there need to notice that all the objectives need to store same action
-                        RL_agents_list[i].store_transition(state_list[i], final_action, reward[i], new_state_list[i], done)
+                        RL_agents_list[i].store_transition(state_list[i], final_action, reward_list[i], new_state_list[i], done)
                     # update the state velue
                     state_list = new_state_list
                     if RL_agents_list[0].memory_counter > MEMORY_CAPACITY:
@@ -176,7 +183,8 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
 
             finally:
                 if save_log:
-                    np.save("./log_01/reward_list" + str(episode) + ".npy", reward_array)
+                    if len(reward_array != 0):
+                        np.save("./log_01/reward_hist" + str(episode) + ".npy", reward_array)
                     np.save("./log_01/vehicle_trajectory" + str(episode) + ".npy", simulation.reference_route)
                     np.save("./log_01/reference_route" + str(episode) + ".npy", simulation.driving_trajectory)
                     np.save("./log_01/vehicle_speed" + str(episode) + ".npy", simulation.speed_list)
@@ -373,18 +381,18 @@ def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
             pass
 
 n_action = 25
-threshold_list = np.array([0.5, 0.3])
-n_state_list = [4, 4]
-test_list = [True, True]
-load_model = [True, True]
-save_model = [False, False]
-step_list = [1200, 1200]
-agent_name_list = ['collision', 'speed']
+threshold_list = np.array([0.5])
+n_state_list = [8]
+test_list = [False]
+load_model = [False]
+save_model = [False]
+step_list = [0]
+agent_name_list = ['path']
 # test(episodes=100, n_action=n_action, agent_name_list=agent_name_list, n_state_list=n_state_list, traffic_generation=False,
 #      render_hud=False, save_log=False)
 RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=load_model, current_step=step_list, test_mode=test_list, threshold_list=threshold_list)
-train(episodes=3000, RL_agents_list=RL_agents_list, current_episodes=1200,
-      maxSteps=1000, n_state_list=n_state_list, traffic_generation=True, save_model=save_model, test_list=test_list,
+train(episodes=3000, RL_agents_list=RL_agents_list, agent_name_list=agent_name_list, current_episodes=0,
+      maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=save_model, test_list=test_list,
       render_hud=False, save_log=False)
 
