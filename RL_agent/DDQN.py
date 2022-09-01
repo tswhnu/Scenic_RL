@@ -10,7 +10,7 @@ import math
 
 # the defination of the hyper parameters
 BATCH_SIZE = 64  # batch size of the training data
-LR = 0.001 # learning rate
+LR = 0.0005 # learning rate
 EPSILON = 0.6  # greedy algorithm
 GAMMA = 0.9  # reward discount
 TARGET_UPDATE = 100  # update the target network after training

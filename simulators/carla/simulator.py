@@ -860,7 +860,7 @@ class CarlaSimulation(DrivingSimulation):
                     obj.carlaActor.apply_control(ctrl)
                     obj._control = None
 
-    def step(self, action):
+    def step(self, action, steer_pid=False, speed_pid=False):
         # defination of different actions
         ## collision action
         # steer action
@@ -868,28 +868,39 @@ class CarlaSimulation(DrivingSimulation):
         selected_action = self.action_table[:, action]
         throttle_value = selected_action[0]
         steer_value = selected_action[1]
-        # if throttle_value >= 0:
-        #     throttle = throttle_value
-        #     brake = 0
-        # else:
-        #     throttle = 0
-        #     brake = abs(throttle_value)
-        self.ego_steer += steer_value
-        # limit the range of steer angle
-        if self.ego_steer < 0:
-            self.ego_steer = max(-0.8, self.ego_steer)
+        if speed_pid is not True:
+            if throttle_value >= 0:
+                throttle = throttle_value
+                brake = 0
+            else:
+                throttle = 0
+                brake = abs(throttle_value)
         else:
-            self.ego_steer = min(0.8, self.ego_steer)
+            speed_controller = PIDLongitudinalController(vehicle=self.ego.carlaActor)
+            acceleration = speed_controller.run_step(self.speed_limit)
+            if acceleration >= 0.0:
+                throttle = min(acceleration, 0.8)
+                brake = 0.0
+            else:
+                throttle = 0.0
+                brake = min(abs(acceleration), 0.3)
+        if steer_pid is not True:
+            self.ego_steer += steer_value
+            # limit the range of steer angle
+            if self.ego_steer < 0:
+                self.ego_steer = max(-0.8, self.ego_steer)
+            else:
+                self.ego_steer = min(0.8, self.ego_steer)
+            steering = self.ego_steer
+        else:
+            steer_controller = PIDLateralController(vehicle=self.ego.carlaActor, K_P=1.0, K_I=0.0, K_D=0.0, dt=0.03)
+            current_steering = steer_controller.run_step(waypoint=self.waypoint_path[self.tra_point_index])
+            if current_steering >= 0:
+                steering = min(0.8, current_steering)
+            else:
+                steering = max(-0.8, current_steering)
         ################################################################################################################
-        speed_controller = PIDLongitudinalController(vehicle=self.ego.carlaActor)
-        acceleration = speed_controller.run_step(self.speed_limit)
-        if acceleration >= 0.0:
-            throttle = min(acceleration, 0.8)
-            brake = 0.0
-        else:
-            throttle = 0.0
-            brake = min(abs(acceleration), 0.3)
-        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=self.ego_steer, throttle=throttle, brake=brake))
+        self.ego.carlaActor.apply_control(carla.VehicleControl(steer=steering, throttle=throttle, brake=brake))
         # the env information
         ego_location = [self.ego.carlaActor.get_location().x, self.ego.carlaActor.get_location().y]
         ego_speed = [self.ego.carlaActor.get_velocity().x, self.ego.carlaActor.get_velocity().y]
