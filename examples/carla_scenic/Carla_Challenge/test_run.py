@@ -245,6 +245,8 @@ def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
     simulation = None
     collision_count = 0
     success_count = 0
+    total_steps = 0
+    total_collision = 0
 
     try:
         if render_hud:
@@ -267,7 +269,6 @@ def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
             vehicle_list, all_id, all_actors = generate_traffic(vehicle_num=npc_vehicle_num,
                                                                 ped_num=npc_ped_num,
                                                                 carla_client=simulator.client)
-        test_start = time.time()
         for episode in range(0, episodes):
             scene, _ = scenario.generate()
             simulation = simulator.createSimulation(scene, render_hud=render_hud)
@@ -280,8 +281,8 @@ def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
             dynamicScenario = simulation.scene.dynamicScenario
             ##########################################################
             start_time = time.time()
-            epi_reward = np.array([0.0,0.0])
-            totoal_reward = np.array([0.0,0.0])
+            epi_reward = np.zeros(len(n_state_list))
+            totoal_reward = np.zeros(len(n_state_list))
             route = []
             #########################################################
             try:
@@ -334,10 +335,12 @@ def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
                         print("reward_info: ", epi_reward / simulation.currentTime)
                         reward_hist.append(epi_reward / simulation.currentTime)
                         reward_array = np.array(reward_hist)
-                        if done_info == 'collision':
+                        if done_info == 'collision1':
                             collision_count += 1
                         elif done_info == 'reach':
                             success_count += 1
+                        elif done_info == 'collision2':
+                            total_collision += 1
                         break
 
                     simulation.updateObjects()
@@ -357,6 +360,8 @@ def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
                 ##############################################################################
                 epi_end = time.time()
                 epi_dur = epi_end - start_time
+                if done_info == 'reach':
+                    total_steps += simulation.currentTime
                 if episode % 20 == 0:
                     print("current_epi:", episode, "last_epi_duration:", epi_dur)
                     print(epi_reward / (simulation.currentTime + 1))
@@ -371,11 +376,9 @@ def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
                 for monitor in simulation.scene.monitors:
                     monitor.stop()
                 veneer.endSimulation(simulation)
-        test_end = time.time()
-        test_dur = test_end - test_start
     finally:
-        # print("average reward: "+str(np.average(reward_array, axis=0))+", average epi duration: "+ str(test_dur / total_episodes))
-        print('success: ', success_count, 'collison: ', collision_count)
+        print("average reward: "+str(np.average(reward_array, axis=0))+", average epi duration: "+ str(total_steps / success_count))
+        print('success: ', success_count, 'collison: ', collision_count, 'total collision: ', total_collision)
         if traffic_generation and simulation is not None:
             print('\ndestroying %d vehicles' % len(vehicle_list))
             simulator.client.apply_batch([carla.command.DestroyActor(x) for x in vehicle_list])
@@ -389,18 +392,18 @@ def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
             pass
 
 n_action = 25
-threshold_list = np.array([0.2])
-n_state_list = [4]
-test_list = [False]
-load_model = [True]
-save_model = [True]
-step_list = [1000]
-agent_name_list = ['speed']
-# test(episodes=100, n_action=n_action, agent_name_list=agent_name_list, n_state_list=n_state_list, traffic_generation=False,
-#      render_hud=False, save_log=False, steer_pid=False, speed_pid=True)
-RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
-                              load_model=load_model, current_step=step_list, test_mode=test_list, threshold_list=threshold_list)
-train(episodes=2500, RL_agents_list=RL_agents_list, agent_name_list=agent_name_list, current_episodes=1010,
-      maxSteps=1000, n_state_list=n_state_list, traffic_generation=False, save_model=save_model, test_list=test_list,
-      render_hud=False, save_log=False, steer_pid=True, speed_pid=False)
+threshold_list = np.array([10, 0.8, 0.2])
+n_state_list = [4, 4, 8]
+test_list = [True, True, True]
+load_model = [True, True, True]
+save_model = [False, False, False]
+step_list = [2100, 2500, 2500]
+agent_name_list = ['collision', 'speed', 'path']
+test(episodes=100, maxSteps=300, n_action=n_action, agent_name_list=agent_name_list, n_state_list=n_state_list, traffic_generation=True,
+     render_hud=False, save_log=False, steer_pid=False, speed_pid=False)
+# RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
+#                               load_model=load_model, current_step=step_list, test_mode=test_list, threshold_list=threshold_list)
+# train(episodes=2510, RL_agents_list=RL_agents_list, agent_name_list=agent_name_list, current_episodes=2010,
+#       maxSteps=200, n_state_list=n_state_list, traffic_generation=False, save_model=save_model, test_list=test_list,
+#       render_hud=False, save_log=False, steer_pid=False, speed_pid=False)
 

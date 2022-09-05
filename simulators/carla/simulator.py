@@ -393,13 +393,17 @@ class CarlaSimulation(DrivingSimulation):
                            self.ego_steer, last_speed, current_speed]).astype(np.single)
         state_speed = state_collision = np.array([last_speed, current_speed,
                                                   current_throttle, current_brake]).astype(np.single)
+        state_scalar = np.array([route_distance, distance1, distance2, angle_diff1, angle_diff2,
+                           self.ego_steer, last_speed, current_speed, current_throttle,
+                                 current_brake]).astype(np.single)
 
         state_collision = np.array([relative_location[0], relative_location[1],
                                     vehicle_vel, collision_flag]).astype(np.single)
         state = {
             'path': state_path,
             'speed': state_speed,
-            'collision': state_collision
+            'collision': state_collision,
+            'scalar': state_scalar
         }
         return state
 
@@ -912,7 +916,11 @@ class CarlaSimulation(DrivingSimulation):
         if len(self.collision_history) != 0:
             print("collision")
             done = True
-            done_info = 'collision'
+            actor_id = self.collision_history[-1].other_actor.type_id
+            if 'walker' in actor_id or 'vehicle' in actor_id:
+                done_info = 'collision1'
+            else:
+                done_info = 'collision2'
         # here check whether the vehicle reach the destination
         elif math.sqrt(
                 (ego_location[0] - final_destination[0]) ** 2 + (ego_location[1] - final_destination[1]) ** 2) < 2:
@@ -937,7 +945,8 @@ class CarlaSimulation(DrivingSimulation):
         reward = {
             'collision': rc,
             'speed': rv,
-            'path': rp
+            'path': rp,
+            'scalar': rv * 0.7 + rp * 0.3
         }
         ############################################################
         # Run simulation for one timestep

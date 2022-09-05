@@ -45,7 +45,7 @@ def pathfollowing_reward(current_state = None, current_route = None, ego_car_loc
     distance = np.abs(A * ego_car_location[0] + B * ego_car_location[1] + C) / (np.sqrt(A ** 2 + B ** 2) + 0.1)
     distance_reward = (distance_bound - distance) / distance_bound
 
-    reward = heading_reward + distance_reward
+    reward = (heading_reward + distance_reward) / 2
 
     if reward <= -1:
         reward = -1
