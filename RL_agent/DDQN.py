@@ -106,7 +106,7 @@ class DDQN(object):
         p = np.random.random()
 
         if os.path.exists(self.eval_model_load_path):
-            E_thresh = EPS_END
+            E_thresh = 0
         else:
             E_thresh = EPS_END + (EPS_START - EPS_END) * \
                        math.exp(-1. * self.learn_step / EPS_DECAY)

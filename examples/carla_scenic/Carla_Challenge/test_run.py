@@ -52,6 +52,10 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
     TH_decay = 200
     reward_list = []
     simulation = None
+    collision_count = 0
+    success_count = 0
+    total_dur = 0
+    total_collsion = 0
 
     try:
         if render_hud:
@@ -157,7 +161,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                         action = RL_agents_list[0].select_action(state_list[0])
                         action_seq = [action]
                     # Run the simulation for a single step and read its state back into Scenic
-                    new_state, reward, done, _ = simulation.step(
+                    new_state, reward, done, done_info = simulation.step(
                         actions=action_seq,
                         last_position=last_position)  # here need to notice that the reward value here will be a list
                     new_state_list = [new_state[1], new_state[0], new_state[0][-2:]]
@@ -175,6 +179,13 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                             if test_list is not True:
                                 RL_agent.optimize_model()
                     if done:
+                        if done_info == 'collision1':
+                            collision_count += 1
+                        elif done_info == 'success':
+                            success_count += 1
+                        elif done_info == 'collision2':
+                            total_collsion += 1
+
                         print("reward_info: ", epi_reward / simulation.currentTime)
                         totoal_reward += epi_reward /simulation.currentTime
                         reward_list.append(epi_reward / simulation.currentTime)
@@ -211,6 +222,8 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                 ##############################################################################
                 epi_end = time.time()
                 epi_dur = epi_end - start_time
+                if done_info == 'success':
+                    total_dur += simulation.currentTime
                 if episode % 20 == 0:
                     print("current_epi:", episode, "last_epi_duration:", epi_dur)
                     print(epi_reward / (simulation.currentTime + 1))
@@ -231,6 +244,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None,
                     monitor.stop()
                 veneer.endSimulation(simulation)
     finally:
+        print(success_count, collision_count, total_collsion, total_dur / success_count, np.average(reward_array, axis=0))
         if traffic_generation and simulation is not None:
             print('\ndestroying %d vehicles' % len(vehicle_list))
             simulator.client.apply_batch([carla.command.DestroyActor(x) for x in vehicle_list])
@@ -247,15 +261,17 @@ n_action_list = [2, 5, 5]
 # n_state_list = [7, 2]
 # agent_name_list = ['path', 'speed']
 n_state_list = [3, 8, 2]
-test_list = [False, True, True]
-load_model = [False, True, True]
-save_model = [True, False, False]
-step_list = [0, 2300, 2300]
+test_list = [True, True, True]
+load_model = [True, True, True]
+save_model = [False, False, False]
+step_list = [900, 900, 4900]
 agent_name_list = ['collision', 'path', 'speed']
 RL_agents_list = creat_agents(n_action=n_action_list, n_state_list=n_state_list, agent_name_list=agent_name_list,
                               load_model=load_model, current_step=step_list, test_mode=test_list)
-train(episodes=1000, RL_agents_list=RL_agents_list, current_episodes=0,
-      maxSteps=1000, n_state_list=n_state_list, traffic_generation=True, save_model=save_model, test_list=test_list,
+train(episodes=500, RL_agents_list=RL_agents_list,
+      current_episodes=0, maxSteps=300,
+      n_state_list=n_state_list, traffic_generation=True,
+      save_model=save_model, test_list=test_list,
       render_hud=False, save_log=False)
 
 # simulation.run(maxSteps=None)

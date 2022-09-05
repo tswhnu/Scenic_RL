@@ -14,12 +14,14 @@ def speed_reward(ego_car_speed, speed_limit, tolerance=5):
     vehicle_vel = math.sqrt(ego_car_speed[0] ** 2 + ego_car_speed[1] ** 2)
     current_speed = 3.6 * vehicle_vel
     # the vehicle will gain a positive value if didn't exceed the speed limit
-    if current_speed <= speed_limit:
-        reward = -current_speed * (current_speed - 2 * speed_limit) / speed_limit ** 2
-    elif current_speed <= 0:
-        reward = -1
+    if current_speed >= 20 and current_speed <= 35:
+        reward = 1
+    elif current_speed < 20:
+        reward = current_speed / 10 - 1
     else:
-        reward = -current_speed / (speed_limit + tolerance)
+        reward = -current_speed / 5 + 8
+    if reward < -1:
+        reward = -1
     return reward
 
 def pathfollowing_reward(current_state = None, current_route = None, ego_car_location = None):
@@ -46,35 +48,27 @@ def pathfollowing_reward(current_state = None, current_route = None, ego_car_loc
     distance = np.abs(A * ego_car_location[0] + B * ego_car_location[1] + C) / (np.sqrt(A ** 2 + B ** 2) + 0.1)
     distance_reward = (distance_bound - distance) / distance_bound
 
-    reward = heading_reward + distance_reward
+    reward = (heading_reward + distance_reward) / 2
 
-
+    if reward < -1:
+        reward = -1
     return reward
 
-def collision_avoidence_reward(relative_location, ego_car_speed, action):
+def collision_avoidence_reward(relative_location, ego_car_speed, collision_flag):
     vehicle_vel = math.sqrt(ego_car_speed[0] ** 2 + ego_car_speed[1] ** 2)
     distance = math.sqrt(relative_location[0] ** 2 + relative_location[1] ** 2)
-
-
-    # if there no need to have any action
-    if relative_location == [0, 0]:
-        if action == 0:
-            reward = 0.5
-        else:
-            reward = -0.5
+    if collision_flag:
+        reward = -1
     else:
-        collision_time = distance / (vehicle_vel + 0.01)
-        if distance > 5:
+        # if there no need to have any action
+        if relative_location == [0, 0]:
+            reward = 0
+        else:
+            collision_time = (distance - 5) / (vehicle_vel + 0.01)
             if collision_time >= 1.5:
                 reward = 1
             else:
-                reward = 2 * collision_time - 2
-        else:
-            speed_limit = 0
-            if vehicle_vel <= 0.5:
-                reward = 1
-            else:
-                reward = -1
+                reward = 2 * collision_time - 1
     return reward
 
 

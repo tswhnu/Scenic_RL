@@ -370,7 +370,7 @@ class CarlaSimulation(DrivingSimulation):
         # danger_vel = danger_vel * 3.6
         # relative_speed = danger_vel
 
-        state2 = [relative_location[0], relative_location[1], vehicle_vel]
+        state2 = np.array([relative_location[0], relative_location[1], vehicle_vel]).astype(np.single)
         return [state1, state2]
 
         # return np.append(trace, [ego_location, ego_speed]).astype(np.single)
@@ -832,6 +832,8 @@ class CarlaSimulation(DrivingSimulation):
 
     def step(self, actions, last_position):
         # defination of different actions
+        done_info = None
+        collision_flag = False
         ## collision action
         # steer action
         if actions[1] == 0:
@@ -894,12 +896,20 @@ class CarlaSimulation(DrivingSimulation):
 
         # here check the end situation
         if len(self.collision_history) != 0:
+            collision_flag = True
             print("collision")
+            actor_id = self.collision_history[-1].other_actor.type_id
+            if 'walker' in actor_id or 'vehicle' in actor_id:
+                done_info = 'collision1'
+            else:
+                done_info = 'collision2'
             done = True
         # here check whether the vehicle reach the destination
         elif math.sqrt(
                 (ego_location[0] - final_destination[0]) ** 2 + (ego_location[1] - final_destination[1]) ** 2) < 2:
             print("reach the destination")
+            done_info = 'success'
+
             done = True
         # if the vehicle travel exceed a range
         elif math.sqrt((ego_location[0] - self.ego_spawn_point[0]) ** 2 + (
@@ -914,7 +924,8 @@ class CarlaSimulation(DrivingSimulation):
         rp = pathfollowing_reward(current_state=self.get_state()[0], current_route=self.trace_route(), ego_car_location=ego_location)
         #### collisioin reward
         collision_state = self.get_state()[1]
-        rc = collision_avoidence_reward(relative_location=[collision_state[0], collision_state[1]], ego_car_speed=ego_speed, action = actions[0])
+        rc = collision_avoidence_reward(relative_location=[collision_state[0], collision_state[1]],
+                                        ego_car_speed=ego_speed, collision_flag=collision_flag)
         reward = np.array([rc, rp, rv])
         ############################################################
         # Run simulation for one timestep
@@ -927,7 +938,7 @@ class CarlaSimulation(DrivingSimulation):
         spectator_transform.location += carla.Location(x=-2, y=0, z=2.0)
         self.spectator.set_transform(spectator_transform)
 
-        return new_state, reward, done, len(self.collision_history)
+        return new_state, reward, done, done_info
 
     def getProperties(self, obj, properties):
         # Extract Carla properties
