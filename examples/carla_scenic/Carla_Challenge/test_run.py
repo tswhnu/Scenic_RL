@@ -314,11 +314,13 @@ def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
                         simulation.hud.render(display)
                         pygame.display.flip()
                     ####################################################################
+                    action_seq = []
                     for i in range(len(RL_agents_list)):
                         final_action, action_set = RL_agents_list[i].TLQ_action_selection(action_set, state_list[i])
+                        action_seq.append(final_action)
                     # Run the simulation for a single step and read its state back into Scenic
                     new_state, reward, done, done_info = simulation.step(
-                        action=final_action, steer_pid=steer_pid, speed_pid=speed_pid)  # here need to notice that the reward value here will be a list
+                        action_seq=action_seq, steer_pid=steer_pid, speed_pid=speed_pid)  # here need to notice that the reward value here will be a list
                     new_state_list = []
                     # here we store the value from reward dic to a list for the convenience of calculate
                     reward_list = []
@@ -392,14 +394,14 @@ def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
             pass
 
 n_action = 25
-threshold_list = np.array([70, 0.7, 0.2])
-n_state_list = [4, 4, 8]
-test_list = [True, True, True]
-load_model = [True, True, True]
-save_model = [False, False, False]
-step_list = [2100, 2100, 2100]
-agent_name_list = ['collision', 'speed', 'path']
-test(episodes=500, maxSteps=1000, n_action=n_action, agent_name_list=agent_name_list, n_state_list=n_state_list, traffic_generation=True,
+threshold_list = np.array([10000, 0.2])
+n_state_list = [4, 8]
+test_list = [True, True]
+load_model = [True, True]
+save_model = [False, False]
+step_list = [2500, 2500]
+agent_name_list = ['speed', 'path']
+test(episodes=500, maxSteps=1000, n_action=n_action, agent_name_list=agent_name_list, n_state_list=n_state_list, traffic_generation=False,
      render_hud=False, save_log=False, steer_pid=False, speed_pid=False)
 # RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
 #                               load_model=load_model, current_step=step_list, test_mode=test_list, threshold_list=threshold_list)

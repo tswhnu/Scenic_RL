@@ -864,14 +864,17 @@ class CarlaSimulation(DrivingSimulation):
                     obj.carlaActor.apply_control(ctrl)
                     obj._control = None
 
-    def step(self, action, steer_pid=False, speed_pid=False):
+    def step(self, action_seq, steer_pid=False, speed_pid=False):
         # defination of different actions
         ## collision action
         # steer action
         done_info = 'None'
-        selected_action = self.action_table[:, action]
-        throttle_value = selected_action[0]
-        steer_value = selected_action[1]
+        for i, action in enumerate(action_seq):
+            selected_action = self.action_table[:, action]
+            if i == 0:
+                throttle_value = selected_action[0]
+            else:
+                steer_value = selected_action[1]
         if speed_pid is not True:
             if throttle_value >= 0:
                 throttle = throttle_value
