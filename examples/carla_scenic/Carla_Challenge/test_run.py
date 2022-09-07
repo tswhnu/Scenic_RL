@@ -40,7 +40,7 @@ def creat_agents(n_action, n_state_list, agent_name_list, load_model=True,
     return agent_list
 
 
-def train(episodes=None, maxSteps=None, RL_agents_list=None, agent_name_list = None,
+def train(episodes=None, maxSteps=None, EPS_DECAY = 1000, RL_agents_list=None, agent_name_list = None,
           current_episodes=150, n_state_list=None, npc_vehicle_num = 100, npc_ped_num = 100,
           traffic_generation = False, save_model=False, test_list=[True, True, True],
           render_hud = True, save_log=False, speed_pid=False, steer_pid=True):
@@ -52,7 +52,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, agent_name_list = N
     # here the EPS mainly used to control the random action selection
     EPS_START = 0.99
     EPS_END = 0.05
-    EPS_DECAY = 200
+    EPS_DECAY = EPS_DECAY
     trained_episodes = 0
 
     reward_hist = []
@@ -93,8 +93,8 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, agent_name_list = N
             dynamicScenario = simulation.scene.dynamicScenario
             ##########################################################
             start_time = time.time()
-            epi_reward = np.array([0.0,0.0])
-            totoal_reward = np.array([0.0,0.0])
+            epi_reward = np.zeros(len(n_state_list))
+            totoal_reward = np.zeros(len(n_state_list))
             route = []
             E_thresh =  EPS_END + (EPS_START - EPS_END) * math.exp(-1. * episode / EPS_DECAY)
             #########################################################
@@ -154,7 +154,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, agent_name_list = N
                         reward_list.append(reward[i])
                     # here we got tge cumulative reward of the current episode
                     epi_reward += reward_list
-                    reward_hist.append(epi_reward / simulation.currentTime)
+                    reward_hist.append(epi_reward / (simulation.currentTime + 1))
                     reward_array = np.array(reward_hist)
 
                     for i in range(len(RL_agents_list)):
@@ -170,7 +170,7 @@ def train(episodes=None, maxSteps=None, RL_agents_list=None, agent_name_list = N
                                 else:
                                     RL_agent.optimize_model(RL_agents_list[0:i])
                     if done:
-                        print("reward_info: ", epi_reward / simulation.currentTime)
+                        print("reward_info: ", epi_reward / (simulation.currentTime + 1))
                         break
 
                     simulation.updateObjects()
@@ -332,8 +332,8 @@ def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
                     state_list = new_state_list
 
                     if done:
-                        print("reward_info: ", epi_reward / simulation.currentTime)
-                        reward_hist.append(epi_reward / simulation.currentTime)
+                        print("reward_info: ", epi_reward / (simulation.currentTime + 1))
+                        reward_hist.append(epi_reward / (simulation.currentTime + 1))
                         reward_array = np.array(reward_hist)
                         if done_info == 'collision1':
                             collision_count += 1
@@ -392,18 +392,18 @@ def test(episodes=None, maxSteps=1000, n_action=None, agent_name_list = None,
             pass
 
 n_action = 25
-threshold_list = np.array([10, 0.8, 0.2])
+threshold_list = np.array([70, 0.7, 0.2])
 n_state_list = [4, 4, 8]
 test_list = [True, True, True]
 load_model = [True, True, True]
 save_model = [False, False, False]
-step_list = [2100, 2500, 2500]
+step_list = [2100, 2100, 2100]
 agent_name_list = ['collision', 'speed', 'path']
-test(episodes=100, maxSteps=300, n_action=n_action, agent_name_list=agent_name_list, n_state_list=n_state_list, traffic_generation=True,
+test(episodes=500, maxSteps=1000, n_action=n_action, agent_name_list=agent_name_list, n_state_list=n_state_list, traffic_generation=True,
      render_hud=False, save_log=False, steer_pid=False, speed_pid=False)
 # RL_agents_list = creat_agents(n_action=n_action, n_state_list=n_state_list, agent_name_list=agent_name_list,
 #                               load_model=load_model, current_step=step_list, test_mode=test_list, threshold_list=threshold_list)
-# train(episodes=2510, RL_agents_list=RL_agents_list, agent_name_list=agent_name_list, current_episodes=2010,
-#       maxSteps=200, n_state_list=n_state_list, traffic_generation=False, save_model=save_model, test_list=test_list,
+# train(episodes=2500, EPS_DECAY = 1000, RL_agents_list=RL_agents_list, agent_name_list=agent_name_list, current_episodes=0,
+#       maxSteps=200, n_state_list=n_state_list, traffic_generation=True, save_model=save_model, test_list=test_list,
 #       render_hud=False, save_log=False, steer_pid=False, speed_pid=False)
 

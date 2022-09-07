@@ -64,11 +64,17 @@ def collision_avoidence_reward(relative_location, ego_car_speed,collision_flag =
             reward = 0
         #when there have dangerous actors
         else:
-            collision_time = (distance - 5) / (vehicle_vel + 0.01)
-            if collision_time >= 1.5:
-                reward = 1
+            if distance >= 3:
+                collision_time = distance / (vehicle_vel + 0.01)
+                if collision_time >= 1.5:
+                    reward = 1
+                else:
+                    reward = 2 * collision_time - 2
             else:
-                reward = 2 * collision_time - 1
+                if vehicle_vel != 0:
+                    reward = -1
+                else:
+                    reward = 1
     return reward
 
 # x = np.arange(100)
