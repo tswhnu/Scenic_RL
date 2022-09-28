@@ -956,7 +956,7 @@ class CarlaSimulation(DrivingSimulation):
         new_state = self.get_state()
         # Render simulation
         spectator_transform = self.ego.carlaActor.get_transform()
-        spectator_transform.location += carla.Location(x=-2, y=0, z=2.0)
+        spectator_transform.location += carla.Location(x=0, y=0, z=2.0)
         self.spectator.set_transform(spectator_transform)
 
         return new_state, reward, done, done_info
